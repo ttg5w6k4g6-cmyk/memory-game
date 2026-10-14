@@ -306,6 +306,13 @@
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30; display: none; }
 
+  /* Адаптация под Android и телефоны */
+  html, body { overscroll-behavior: none; }
+  .screen, .sheet { overscroll-behavior-y: contain; }
+  .overlay .modal { max-height: 100%; overflow-y: auto; }
+  #tutText { white-space: pre-line; text-align: left; }
+  .set-sub { font-size: .8rem; color: var(--muted); margin-top: 2px; }
+
   /* Магазин, лидеры, бесконечность */
   .shop-btn {
     display: flex; align-items: center; justify-content: space-between; width: 100%;
@@ -484,6 +491,10 @@
       <div class="set-title">Звуки</div>
       <button class="switch on" id="soundSwitch" role="switch" aria-checked="true" aria-label="Звуки"><i></i></button>
     </div>
+    <div class="set-row inline">
+      <div><div class="set-title">Вибрация</div><div class="set-sub">Работает на Android</div></div>
+      <button class="switch on" id="vibeSwitch" role="switch" aria-checked="true" aria-label="Вибрация"><i></i></button>
+    </div>
     <div class="set-row">
       <div class="set-title">Оформление</div>
       <div class="seg" id="lookSeg">
@@ -492,6 +503,7 @@
         <button data-look="dark">Тёмное</button>
       </div>
     </div>
+    <button class="btn alt" id="openHome">📲 Добавить игру на экран «Домой»</button>
     <button class="btn alt" id="openTut">❓ Как играть</button>
     <button class="btn alt danger" id="reset">Сбросить прогресс уровней</button>
   </div>
@@ -683,7 +695,8 @@
     { icon: "🎮", title: "Режимы", text: "Классика, игра с ботом, вдвоём, на время и с ограничением ходов. Выбирай их в меню «Режимы»." },
     { icon: "💡", title: "Подсказки и серии", text: "Подсказка на секунду открывает половину закрытых карточек. Найди 3 пары подряд и получишь ещё одну." },
     { icon: "⭐", title: "Звёзды и награды", text: "Чем меньше ходов, тем больше звёзд. Звёзды открывают уровни, а на счёте ими платят в магазине за режимы, темы и рубашки. Больше всего звёзд даёт режим ♾️." },
-    { icon: "📲", title: "Как приложение", text: "В Safari нажми «Поделиться» и выбери «На экран Домой», чтобы запускать игру с иконкой, как приложение." }
+    { icon: "🍎", title: "На экран «Домой»: iPhone", text: "1. Открой игру в Safari.\n2. Нажми «Поделиться» (квадрат со стрелкой вверх).\n3. Прокрути меню и выбери «На экран “Домой”».\n4. Нажми «Добавить».\n\nИгра появится на экране с иконкой, как приложение." },
+    { icon: "🤖", title: "На экран «Домой»: Android", text: "1. Открой игру в Chrome.\n2. Нажми ⋮ (три точки вверху справа).\n3. Выбери «Добавить на главный экран» или «Установить приложение».\n4. Подтверди кнопкой «Добавить».\n\nВ Samsung Internet: меню ≡ → «Добавить на главный экран». Названия пунктов зависят от версии телефона." }
   ];
   var HINT_SHARE = 0.5, HINTS_PER_LEVEL = 3, HINT_CAP = 7;
   // На своём хостинге кнопка «Поделиться» отправляет адрес самой страницы,
@@ -696,7 +709,7 @@
   } catch (e) {}
 
   var KEY3 = "memory-progress-v3", THEME_KEY = "memory-theme", MODE_KEY = "memory-mode",
-      SOUND_KEY = "memory-sound", LOOK_KEY = "memory-look", META_KEY = "memory-meta-v1";
+      SOUND_KEY = "memory-sound", LOOK_KEY = "memory-look", META_KEY = "memory-meta-v1", VIBE_KEY = "memory-vibe";
 
   /* ================= Утилиты ================= */
   function $(id) { return document.getElementById(id); }
@@ -795,7 +808,7 @@
   var meta;
   function saveMeta() { lsSet(META_KEY, JSON.stringify(meta)); }
 
-  var theme, mode, soundOn, look, allProgress, progress;
+  var theme, mode, soundOn, vibeOn = true, look, allProgress, progress;
   function loadState() {
     meta = loadMeta();
     allProgress = loadAll();
@@ -804,6 +817,7 @@
     mode = lsGet(MODE_KEY);
     if (!MODES.some(function (m) { return m.id === mode; })) mode = "solo";
     soundOn = lsGet(SOUND_KEY) !== "off";
+    vibeOn = lsGet(VIBE_KEY) !== "off";
     look = lsGet(LOOK_KEY) || "auto";
     checkUnlocks(true);
     if (!isThemeOpen(theme)) theme = "animals";
@@ -864,11 +878,31 @@
     tick:  function () { tone(1000, 0, 0.05, "square", 0.06); },
     award: function () { [784, 988, 1175, 1568].forEach(function (f, k) { tone(f, k * 0.09, 0.2, "sine", 0.16); }); }
   };
+  // Вибрация (Android; на iPhone браузер её не поддерживает)
+  var VIBES = { flip: 8, match: [15, 40, 15], miss: 60, hint: [10, 30, 10], win: [40, 50, 40, 50, 120], lose: [120, 60, 120], tick: 5, award: [20, 40, 20] };
+  function buzz(pattern) {
+    if (!vibeOn) return;
+    try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+  }
+  Object.keys(sfx).forEach(function (k) {
+    var f = sfx[k];
+    sfx[k] = function () { f(); buzz(VIBES[k]); };
+  });
+  function toggleVibe() {
+    vibeOn = !vibeOn;
+    lsSet(VIBE_KEY, vibeOn ? "on" : "off");
+    updateSoundBtns();
+    if (vibeOn) buzz(30);
+  }
+
   function updateSoundBtns() {
     $("soundGame").textContent = soundOn ? "🔊" : "🔇";
     var sw = $("soundSwitch");
     sw.classList.toggle("on", soundOn);
     sw.setAttribute("aria-checked", soundOn ? "true" : "false");
+    var vs = $("vibeSwitch");
+    vs.classList.toggle("on", vibeOn);
+    vs.setAttribute("aria-checked", vibeOn ? "true" : "false");
   }
   function toggleSound() {
     soundOn = !soundOn;
@@ -1015,6 +1049,7 @@
     if (l === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", l);
     qsa("#lookSeg button").forEach(function (b) { b.classList.toggle("on", b.dataset.look === l); });
+    updateThemeColor();
   }
   function applyBack(id) {
     if (meta.unlocked.backs.indexOf(id) < 0) id = "classic";
@@ -1090,7 +1125,7 @@
 
   /* ================= Обучение ================= */
   var tutPage = 0;
-  function openTutorial() { tutPage = 0; renderTut(); $("tutorial").classList.add("show"); }
+  function openTutorial(page) { tutPage = page || 0; renderTut(); $("tutorial").classList.add("show"); }
   function closeTutorial() {
     $("tutorial").classList.remove("show");
     meta.tutorial = true;
@@ -1483,6 +1518,7 @@
 
   function updatePlayers() {
     document.body.classList.toggle("turn2", twoPlayers() && turn === 1);
+    updateThemeColor();
     $("pl0").classList.toggle("active", turn === 0);
     $("pl1").classList.toggle("active", turn === 1);
     $("sc0").textContent = scores[0];
@@ -1601,6 +1637,8 @@
   });
 
   $("openTut").addEventListener("click", function () { closeSheets(); openTutorial(); });
+  $("openHome").addEventListener("click", function () { closeSheets(); openTutorial(isAndroid ? 5 : 4); });
+  $("vibeSwitch").addEventListener("click", toggleVibe);
   $("tutNext").addEventListener("click", function () {
     if (tutPage < TUT.length - 1) { tutPage++; renderTut(); } else closeTutorial();
   });
@@ -1834,7 +1872,7 @@
 
   /* ================= Аккаунты (хранятся на этом устройстве) ================= */
   var ACC_KEY = "memory-accounts-v1", SESSION_KEY = "memory-session";
-  var DATA_KEYS = [KEY3, META_KEY, THEME_KEY, MODE_KEY, SOUND_KEY, LOOK_KEY];
+  var DATA_KEYS = [KEY3, META_KEY, THEME_KEY, MODE_KEY, SOUND_KEY, LOOK_KEY, VIBE_KEY];
   var currentUser = null, acctTab = "login", codeMode = "export";
 
   function getAccounts() {
@@ -2048,6 +2086,43 @@
       say(msgEl, typeof e === "string" ? e : "Код повреждён", true);
     }
   });
+
+  /* ================= Android: кнопка «Назад» и цвет панели ================= */
+  var isAndroid = /Android/i.test(navigator.userAgent || "");
+
+  function updateThemeColor() {
+    try {
+      var c = getComputedStyle(document.body).getPropertyValue("--bg").trim();
+      var m = document.querySelector('meta[name="theme-color"]');
+      if (m && c) m.setAttribute("content", c);
+    } catch (e) {}
+  }
+
+  // «Назад» сначала закрывает окна и возвращает в меню, и только потом выходит со страницы.
+  var navEntry = false, navIgnore = 0;
+  function isDeep() {
+    return !!(qsa(".sheet-overlay.show").length || $("tutorial").classList.contains("show") ||
+      $("overlay").classList.contains("show") || $("game").classList.contains("active"));
+  }
+  function handleBack() {
+    if ($("tutorial").classList.contains("show")) { closeTutorial(); return; }
+    if (qsa(".sheet-overlay.show").length) { closeSheets(); return; }
+    if ($("overlay").classList.contains("show") || $("game").classList.contains("active")) toMenu();
+  }
+  function syncNav() {
+    try {
+      var deep = isDeep();
+      if (deep && !navEntry) { history.pushState({ fm: 1 }, ""); navEntry = true; }
+      else if (!deep && navEntry) { navEntry = false; navIgnore++; history.back(); }
+    } catch (e) {}
+  }
+  window.addEventListener("popstate", function () {
+    if (navIgnore > 0) { navIgnore--; return; }
+    navEntry = false;
+    handleBack();
+    syncNav();
+  });
+  setInterval(syncNav, 250);
 
   /* ================= Запуск ================= */
   (function () {
