@@ -570,7 +570,7 @@
     </div>
 
     <div id="acctGuest">
-      <p class="share-note">Аккаунт хранится на этом устройстве: у каждого игрока свой прогресс. Чтобы перенести его на другой телефон, используй код переноса.</p>
+      <p class="share-note" id="acctNote">Аккаунт хранится на этом устройстве.</p>
       <div class="seg" id="acctTabs">
         <button data-tab="login" class="on">Вход</button>
         <button data-tab="reg">Регистрация</button>
@@ -627,7 +627,7 @@
       <button data-tab="inf">♾️ Бесконечность</button>
     </div>
     <div id="lbList"></div>
-    <p class="share-note">В таблице игроки с этого устройства. Общий рейтинг для всех друзей потребует сервера.</p>
+    <p class="share-note" id="lbNote">В таблице игроки с этого устройства.</p>
   </div>
 </div>
 
@@ -729,6 +729,7 @@
   function $(id) { return document.getElementById(id); }
   function qsa(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
   var PFX = "";   // префикс ключей текущего аккаунта ("" = гость)
+  var cloud = { on: false, token: null, nick: "", synced: false, timer: null };
   function rawGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function rawSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function rawDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
@@ -821,7 +822,7 @@
     return m;
   }
   var meta;
-  function saveMeta() { lsSet(META_KEY, JSON.stringify(meta)); }
+  function saveMeta() { lsSet(META_KEY, JSON.stringify(meta)); cloudDirty(); }
 
   var theme, mode, soundOn, vibeOn = true, look, allProgress, progress;
   function loadState() {
@@ -839,7 +840,7 @@
     if (!isModeOpen(mode)) mode = "solo";
     progress = allProgress[theme];
   }
-  function save() { lsSet(KEY3, JSON.stringify(allProgress)); }
+  function save() { lsSet(KEY3, JSON.stringify(allProgress)); cloudDirty(); }
 
   /* ================= Состояние игры ================= */
   var pm = "solo", curLv = LEVELS[0], cur = 0, isDaily = false, gameTheme = "animals", startTurn = 0;
@@ -2149,7 +2150,7 @@
     Object.keys(accs).forEach(function (id) { add(accs[id].nick, pfxFor(id), id); });
     return rows;
   }
-  function renderLb() {
+  function renderLbLocal() {
     qsa("#lbTabs button").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === lbTab); });
     var rows = boardRows().filter(function (r) { return r.stars > 0 || r.inf > 0 || r.me; });
     rows.sort(function (a, b) {
@@ -2162,7 +2163,30 @@
         '<span class="lb-val">' + (lbTab === "stars" ? "★ " + r.stars : "♾️ " + r.inf) + "</span></div>";
     }).join("") : '<p class="share-note">Пока пусто. Пройди уровень!</p>';
   }
-  function openLb() { renderLb(); openSheet("lbSheet"); }
+  function renderLb() {
+    qsa("#lbTabs button").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === lbTab); });
+    var localNote = "В таблице игроки с этого устройства. Общий рейтинг появится, когда подключится сервер.";
+    if (!cloud.on) { renderLbLocal(); $("lbNote").textContent = localNote; return; }
+    var tab = lbTab;
+    $("lbList").innerHTML = '<p class="share-note">Загрузка…</p>';
+    rpc("mg_leaderboard", { p_by: tab === "inf" ? "inf" : "stars" }).then(function (rows) {
+      if (tab !== lbTab) return;
+      var me = (currentUser ? currentUser.nick : "").toLowerCase();
+      rows = (rows || []).filter(function (r) { return (tab === "inf" ? r.inf_best : r.stars) > 0 || r.nick.toLowerCase() === me; });
+      var medals = ["🥇", "🥈", "🥉"];
+      $("lbList").innerHTML = rows.length ? rows.map(function (r, i) {
+        var mine = r.nick.toLowerCase() === me;
+        return '<div class="lb-row' + (mine ? " me" : "") + '"><span class="lb-rank">' + (medals[i] || (i + 1) + ".") + "</span>" +
+          '<span class="lb-name">' + esc(r.nick) + (mine ? " (ты)" : "") + "</span>" +
+          '<span class="lb-val">' + (tab === "inf" ? "♾️ " + r.inf_best : "★ " + r.stars) + "</span></div>";
+      }).join("") : '<p class="share-note">Пока пусто. Пройди уровень!</p>';
+      $("lbNote").textContent = "🌐 Общий рейтинг всех игроков. Твой результат обновляется, когда ты сохраняешь прогресс.";
+    }, function () { renderLbLocal(); $("lbNote").textContent = localNote; });
+  }
+  function openLb() {
+    openSheet("lbSheet");
+    if (cloud.token && cloud.synced) cloudPush(false).then(renderLb, renderLb); else renderLb();
+  }
 
   $("openShop").addEventListener("click", openShop);
   $("openLb").addEventListener("click", openLb);
@@ -2204,7 +2228,7 @@
     return Promise.resolve("w" + hashStr(salt + id + pass).toString(16));
   }
 
-  function updateAcctPill() { $("acctName").textContent = currentUser ? currentUser.nick : "Гость"; }
+  function updateAcctPill() { $("acctName").textContent = currentUser ? (currentUser.cloud ? "☁️ " : "") + currentUser.nick : "Гость"; }
   function applyAll() {
     applyLook(look);
     applyBack(meta.back);
@@ -2224,6 +2248,7 @@
     applyAll();
   }
   function endSession() {
+    cloudDrop(true);
     rawDel(SESSION_KEY);
     currentUser = null;
     PFX = "";
@@ -2272,11 +2297,22 @@
   function openAcct() {
     if (currentUser) {
       showAcctView("user");
-      $("acctHello").textContent = "Привет, " + currentUser.nick + "! Прогресс сохраняется автоматически на этом устройстве. Звёзд всего: " + totalStars() + ".";
+      var isCloud = !!cloud.token;
+      $("acctExport").classList.toggle("hidden", isCloud);
+      $("acctImportOpen2").classList.toggle("hidden", isCloud);
+      $("acctHello").textContent = isCloud
+        ? "Привет, " + currentUser.nick + "! ☁️ Прогресс сохраняется на сервере: войди с любого устройства и он будет на месте." +
+          (cloud.synced ? "" : " Сейчас нет связи, сохраню, когда появится интернет.") + " Звёзд всего: " + lifetime() + "."
+        : "Привет, " + currentUser.nick + "! Прогресс сохраняется автоматически на этом устройстве. Звёзд всего: " + totalStars() + ".";
       say($("acctMsg2"), "");
     } else {
       showAcctView("guest");
-      setAcctTab(Object.keys(getAccounts()).length ? "login" : "reg");
+      $("acctNote").textContent = cloud.on
+        ? "☁️ Онлайн-аккаунт: прогресс хранится на сервере и доступен на любом устройстве, а рейтинг общий для всех игроков. Пароль от 6 символов."
+        : "📱 Сервер сейчас недоступен, аккаунт хранится только на этом устройстве. Перенести его на другой телефон можно кодом переноса.";
+      var lastNick = rawGet(LAST_NICK_KEY);
+      setAcctTab((lastNick || cloud.on || Object.keys(getAccounts()).length) ? "login" : "reg");
+      if (lastNick && !$("acctNick").value) $("acctNick").value = lastNick;
       $("acctPass").value = "";
     }
     openSheet("acctSheet");
@@ -2338,7 +2374,7 @@
   qsa("#acctTabs button").forEach(function (b) { b.addEventListener("click", function () { setAcctTab(b.dataset.tab); }); });
   $("acctGo").addEventListener("click", function () {
     var nick = $("acctNick").value.trim(), pass = $("acctPass").value, btn = $("acctGo");
-    var job = acctTab === "login" ? doLogin(nick, pass) : doRegister(nick, pass, $("acctMove").checked);
+    var job = acctTab === "login" ? acctLogin(nick, pass) : acctRegister(nick, pass, $("acctMove").checked);
     btn.disabled = true;
     job.then(function () {
       btn.disabled = false;
@@ -2352,6 +2388,7 @@
   });
   $("acctLogout").addEventListener("click", function () { endSession(); closeSheets(); showToast("Вы вышли из аккаунта"); });
   twoTap($("acctDelete"), "Нажми ещё раз для удаления", function () {
+    if (cloud.token) cloudDeleteRemote();
     var prefix = pfxFor(currentUser.id), del = [];
     try {
       for (var i = 0; i < localStorage.length; i++) {
@@ -2428,8 +2465,182 @@
   });
   setInterval(syncNav, 250);
 
+  /* ================= Сервер (Supabase): аккаунты, облако, общий рейтинг ================= */
+  var CLOUD_URL = "https://wjagomizhsxgnrjuskzg.supabase.co";
+  var CLOUD_API_KEY = "sb_publishable_Ibf1JeN7-FxHQVICDPasKA_uU4Sxy6t";   // публичный ключ, его можно держать в коде
+  var CLOUD_KEY = "memory-cloud", LAST_NICK_KEY = "memory-last-nick";
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+  function rpc(name, args, keepalive) {
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var tm = ctrl ? setTimeout(function () { ctrl.abort(); }, 9000) : null;
+    return fetch(CLOUD_URL + "/rest/v1/rpc/" + name, {
+      method: "POST",
+      headers: { "apikey": CLOUD_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(args || {}),
+      keepalive: !!keepalive,
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) {
+      if (tm) clearTimeout(tm);
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    }, function (e) { if (tm) clearTimeout(tm); throw e; });
+  }
+  function cloudMsg(code) {
+    return ({
+      nick: "Ник: от 3 до 16 символов, буквы, цифры, _ или -",
+      pass: "Пароль: от 6 до 72 символов",
+      taken: "Этот ник уже занят",
+      bad: "Неверный ник или пароль",
+      locked: "Слишком много попыток. Подожди 5 минут",
+      big: "Слишком много данных для сохранения",
+      session: "Сессия закончилась, войди снова"
+    })[code] || "Ошибка сервера, попробуй позже";
+  }
+  function netFail(e) { throw typeof e === "string" ? e : "Нет связи с сервером. Попробуй позже"; }
+
+  function snapshotData(prefix) {
+    var d = {};
+    DATA_KEYS.forEach(function (k) { var v = rawGet(prefix + k); if (v !== null) d[k] = v; });
+    return d;
+  }
+  function applySnapshot(prefix, d) {
+    DATA_KEYS.forEach(function (k) { if (d && typeof d[k] === "string") rawSet(prefix + k, d[k]); });
+  }
+  function statsOfSnapshot(d) {
+    var out = { stars: 0, inf: 0 };
+    try {
+      var prog = JSON.parse((d && d[KEY3]) || "{}") || {};
+      Object.keys(prog).forEach(function (k) {
+        var t = prog[k];
+        if (t && t.stars) t.stars.forEach(function (n) { out.stars += n || 0; });
+      });
+      var m = JSON.parse((d && d[META_KEY]) || "{}") || {};
+      out.stars += m.bank || 0;
+      out.inf = (m.stats && m.stats.infBest) || 0;
+    } catch (e) {}
+    return out;
+  }
+  function cloudPayload() {
+    return { p_token: cloud.token, p_stars: lifetime(), p_inf: (meta.stats && meta.stats.infBest) || 0, p_data: snapshotData(PFX) };
+  }
+  function cloudPush(keepalive) {
+    if (!cloud.token || !cloud.synced) return Promise.resolve();
+    return rpc("mg_save", cloudPayload(), keepalive).then(function (r) {
+      if (r && r.ok === false && r.error === "session") cloudExpired();
+    }, function () {});
+  }
+  function cloudDirty() {
+    if (!cloud.token || !cloud.synced) return;
+    clearTimeout(cloud.timer);
+    cloud.timer = setTimeout(function () { cloudPush(false); }, 4000);
+  }
+  function cloudExpired() {
+    cloud.token = null; cloud.synced = false;
+    rawDel(CLOUD_KEY);
+    currentUser = null; PFX = "";
+    loadState(); applyAll();
+    showToast("Сессия закончилась, войди в аккаунт снова");
+  }
+  function cloudDrop(remote) {
+    var tok = cloud.token;
+    clearTimeout(cloud.timer);
+    var payload = (tok && remote && cloud.synced) ? cloudPayload() : null;
+    cloud.token = null; cloud.nick = ""; cloud.synced = false;
+    rawDel(CLOUD_KEY);
+    if (payload) rpc("mg_save", payload, true).then(function () { return rpc("mg_logout", { p_token: tok }, true); }).catch(function () {});
+    else if (tok && remote) rpc("mg_logout", { p_token: tok }, true).catch(function () {});
+  }
+  function cloudDeleteRemote() {
+    var tok = cloud.token;
+    cloud.synced = false;
+    clearTimeout(cloud.timer);
+    rpc("mg_delete", { p_token: tok }, true).catch(function () {});
+  }
+  function cloudStart(nick, token) {
+    cloud.token = token; cloud.nick = nick; cloud.synced = false;
+    rawSet(CLOUD_KEY, JSON.stringify({ token: token, nick: nick }));
+    rawSet(LAST_NICK_KEY, nick);
+    rawDel(SESSION_KEY);
+    currentUser = { id: "c-" + nick.toLowerCase(), nick: nick, cloud: true };
+    PFX = pfxFor(currentUser.id);
+  }
+  // Сравниваем сервер и это устройство: побеждает тот, у кого больше звёзд
+  function mergeCloud(r) {
+    var cloudStars = r.stars || 0, localStars = lifetime();
+    var d = r.data && typeof r.data === "object" ? r.data : {};
+    var cloudRicher = Object.keys(d).length > 0 && cloudStars > localStars;
+    if (cloudRicher) {
+      applySnapshot(PFX, d);
+      loadState(); applyAll();
+      showToast("☁️ Прогресс загружен с сервера");
+    }
+    cloud.synced = true;
+    if (!cloudRicher) cloudPush(false);
+  }
+  function cloudLogin(nick, pass) {
+    return rpc("mg_login", { p_nick: nick, p_pass: pass }).then(function (r) {
+      if (!r || r.ok !== true) throw cloudMsg(r && r.error);
+      cloudStart(r.nick, r.token);
+      loadState(); applyAll();
+      mergeCloud(r);
+    }).catch(netFail);
+  }
+  function cloudRegister(nick, pass, move) {
+    if (!validNick(nick)) return Promise.reject(cloudMsg("nick"));
+    if (pass.length < 6 || pass.length > 72) return Promise.reject(cloudMsg("pass"));
+    var carry = !!move && PFX === "";
+    var d = carry ? snapshotData("") : {};
+    var st = statsOfSnapshot(d);
+    return rpc("mg_register", { p_nick: nick, p_pass: pass, p_data: d, p_stars: st.stars, p_inf: st.inf }).then(function (r) {
+      if (!r || r.ok !== true) throw cloudMsg(r && r.error);
+      cloudStart(r.nick, r.token);
+      if (carry) applySnapshot(PFX, d);
+      loadState(); applyAll();
+      cloud.synced = true;
+    }).catch(netFail);
+  }
+  function acctLogin(nick, pass) {
+    if (!cloud.on) return doLogin(nick, pass);
+    return cloudLogin(nick, pass).catch(function (e) {
+      // аккаунты, созданные раньше только на этом устройстве
+      if (getAccounts()[nick.toLowerCase()]) return doLogin(nick, pass).catch(function () { throw e; });
+      throw e;
+    });
+  }
+  function acctRegister(nick, pass, move) {
+    return cloud.on ? cloudRegister(nick, pass, move) : doRegister(nick, pass, move);
+  }
+  function cloudInit() {
+    return rpc("mg_leaderboard", { p_by: "stars" }).then(function () { cloud.on = true; }, function () { cloud.on = false; })
+      .then(function () {
+        if (!cloud.token || !cloud.on) return;
+        return rpc("mg_me", { p_token: cloud.token }).then(function (r) {
+          if (!r || r.ok === false) { cloudExpired(); return; }
+          mergeCloud(r);
+        }, function () {});
+      });
+  }
+  window.addEventListener("online", cloudInit);
+  window.addEventListener("pagehide", function () { if (cloud.token) cloudPush(true); });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { if (cloud.token) cloudPush(true); }
+    else if (cloud.token && !cloud.synced) cloudInit();
+  });
+
   /* ================= Запуск ================= */
   (function () {
+    try {
+      var c = JSON.parse(rawGet(CLOUD_KEY) || "null");
+      if (c && c.token && c.nick) {
+        cloud.token = c.token; cloud.nick = c.nick;
+        currentUser = { id: "c-" + c.nick.toLowerCase(), nick: c.nick, cloud: true };
+        PFX = pfxFor(currentUser.id);
+        return;
+      }
+    } catch (e) {}
     var sess = rawGet(SESSION_KEY), accs = getAccounts();
     if (sess && accs[sess.toLowerCase()]) {
       currentUser = { id: sess.toLowerCase(), nick: accs[sess.toLowerCase()].nick };
@@ -2438,6 +2649,7 @@
   })();
   loadState();
   applyAll();
+  cloudInit();
   if (!meta.tutorial) openTutorial();
 })();
 </script>
