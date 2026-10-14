@@ -306,6 +306,40 @@
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30; display: none; }
 
+  /* Магазин, лидеры, бесконечность */
+  .shop-btn {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    border: 0; border-radius: 18px; padding: 12px 16px; margin-bottom: 10px; cursor: pointer;
+    background: linear-gradient(135deg, #f6d365, #fda085); color: #3b2a00;
+    font-weight: 700; font-size: 1.1rem; box-shadow: 0 4px 0 rgba(31,59,77,.18); transition: transform .08s;
+  }
+  .shop-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(31,59,77,.18); }
+  .mini-row .mini { font-size: 1.2rem; }
+  .mini-row .mini span { font-size: .72rem; }
+  .inf-tile { grid-column: 1 / -1; }
+  .inf-tile .stars { color: var(--ink); font-size: 1rem; letter-spacing: 0; }
+  .swatch { position: relative; }
+  .swatch.locked { opacity: .5; }
+  .swatch .lk { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+  .shop-bal { margin: -6px 0 6px; font-weight: 600; }
+  .shop-bal b { color: var(--star); }
+  .shop-h { font-weight: 700; margin: 16px 0 8px; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+  .shop-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--bg); margin-bottom: 8px; }
+  .shop-item .si { font-size: 1.8rem; width: 40px; text-align: center; flex: none; }
+  .swatch-mini { width: 40px; height: 40px; border-radius: 10px; display: block; }
+  .shop-item .st { flex: 1; min-width: 0; }
+  .shop-item .st b { display: block; }
+  .shop-item .st span { color: var(--muted); font-size: .82rem; line-height: 1.25; display: block; }
+  .buy { border: 0; border-radius: 12px; padding: 10px 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; flex: none; min-width: 66px; }
+  .buy.cant { background: var(--locked); color: var(--ink); }
+  .buy.done { background: transparent; color: var(--muted); cursor: default; }
+  .lb-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--bg); margin-bottom: 8px; }
+  .lb-row.me { outline: 3px solid var(--accent); }
+  .lb-rank { width: 36px; font-size: 1.3rem; text-align: center; }
+  .lb-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-val { font-weight: 700; }
+  #lbTabs { margin-bottom: 12px; }
+
   /* Аккаунт, замки и поля ввода */
   .acct-pill {
     align-self: flex-end; border: 0; border-radius: 999px; background: var(--card-face);
@@ -348,11 +382,13 @@
       <span class="ai">⚙️</span><span class="at">Настройки</span><span class="as" id="themeLabel">Животные</span>
     </button>
   </div>
+  <button class="shop-btn" id="openShop"><span>🛒 Магазин</span><span id="shopBal">★ 0</span></button>
   <button class="daily" id="openDaily">
     <span class="di">📅</span>
     <div><b>Ежедневный вызов</b><small id="dailyInfo">Новое поле каждый день</small></div>
   </button>
   <div class="mini-row">
+    <button class="mini" id="openLb">🏅<span>Лидеры</span></button>
     <button class="mini" id="openAch">🏆<span>Награды</span></button>
     <button class="mini" id="openStats">📊<span>Статистика</span></button>
     <button class="mini" id="openShare">📤<span>Поделиться</span></button>
@@ -371,9 +407,9 @@
     <button class="icon-btn" id="soundGame" aria-label="Звук">🔊</button>
   </div>
   <div class="stats" id="stats">
-    <div class="stat" id="movesStat"><b id="moves">0</b><span>ходов</span></div>
+    <div class="stat" id="movesStat"><b id="moves">0</b><span id="lblMoves">ходов</span></div>
     <div class="stat" id="timeStat"><b id="time">0</b><span id="lblTime">секунд</span></div>
-    <div class="stat"><b id="best">—</b><span>рекорд</span></div>
+    <div class="stat"><b id="best">—</b><span id="lblBest">рекорд</span></div>
   </div>
   <div class="players hidden" id="players">
     <div class="pl" id="pl0"><span id="pn0">Игрок 1</span><b id="sc0">0</b></div>
@@ -540,6 +576,35 @@
   </div>
 </div>
 
+<!-- Панель: Магазин -->
+<div class="sheet-overlay" id="shopSheet">
+  <div class="sheet" role="dialog" aria-label="Магазин">
+    <div class="sheet-head">
+      <h3>Магазин</h3>
+      <button class="icon-btn" data-close aria-label="Закрыть">✕</button>
+    </div>
+    <div class="shop-bal">Твои звёзды: <b id="shopBalance">★ 0</b></div>
+    <div id="shopList"></div>
+    <p class="share-note" style="margin-top:12px">Звёзды копятся за уровни, а больше всего их даёт режим ♾️ Бесконечность. Покупки сохраняются в аккаунте.</p>
+  </div>
+</div>
+
+<!-- Панель: Лидеры -->
+<div class="sheet-overlay" id="lbSheet">
+  <div class="sheet" role="dialog" aria-label="Лидеры">
+    <div class="sheet-head">
+      <h3>Лидеры</h3>
+      <button class="icon-btn" data-close aria-label="Закрыть">✕</button>
+    </div>
+    <div class="seg" id="lbTabs">
+      <button data-tab="stars" class="on">★ Звёзды</button>
+      <button data-tab="inf">♾️ Бесконечность</button>
+    </div>
+    <div id="lbList"></div>
+    <p class="share-note">В таблице игроки с этого устройства. Общий рейтинг для всех друзей потребует сервера.</p>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status"></div>
 <canvas id="confetti"></canvas>
 
@@ -580,7 +645,8 @@
     { id: "bot",   icon: "🤖", name: "Против бота",       desc: "Сыграй с компьютером и выбери его уровень" },
     { id: "duo",   icon: "👥", name: "На двоих",          desc: "Ходите по очереди, побеждает тот, у кого больше пар" },
     { id: "time",  icon: "⏱️", name: "На время",          desc: "Найди все пары, пока не закончился таймер" },
-    { id: "moves", icon: "🎯", name: "Ограниченные ходы", desc: "Уложись в лимит ходов" }
+    { id: "moves", icon: "🎯", name: "Ограниченные ходы", desc: "Уложись в лимит ходов" },
+    { id: "inf",   icon: "♾️", name: "Бесконечность",     desc: "Один бесконечный уровень: проходи этапы и копи звёзды для магазина" }
   ];
   var BOT_LEVELS = {
     easy: { name: "Лёгкий",  acc: 0.35, slip: 0.25 },
@@ -607,16 +673,19 @@
     { id: "daily3",    icon: "🗓️", name: "Три дня подряд",     desc: "Пройди ежедневный вызов 3 дня подряд" },
     { id: "stars",     icon: "🌟", name: "Звёздный мастер",    desc: "Получи 3 звезды на всех уровнях одной темы" },
     { id: "master",    icon: "👑", name: "Мастер памяти",      desc: "Пройди 10-й уровень" },
-    { id: "traveler",  icon: "🧭", name: "Путешественник",     desc: "Выиграй в 4 разных темах" }
+    { id: "traveler",  icon: "🧭", name: "Путешественник",     desc: "Выиграй в 4 разных темах" },
+    { id: "inf5",      icon: "♾️", name: "Бесконечный путь",   desc: "Пройди 5 этапов за один забег в режиме Бесконечность" },
+    { id: "inf10",     icon: "🚀", name: "Без предела",        desc: "Пройди 10 этапов за один забег" },
+    { id: "buyer",     icon: "🛒", name: "Покупатель",         desc: "Купи что-нибудь в магазине" }
   ];
   var TUT = [
     { icon: "🃏", title: "Найди пары", text: "Переворачивай по две карточки. Одинаковые остаются открытыми, разные закрываются. Открой все пары, чтобы победить." },
     { icon: "🎮", title: "Режимы", text: "Классика, игра с ботом, вдвоём, на время и с ограничением ходов. Выбирай их в меню «Режимы»." },
     { icon: "💡", title: "Подсказки и серии", text: "Подсказка на секунду открывает половину закрытых карточек. Найди 3 пары подряд и получишь ещё одну." },
-    { icon: "⭐", title: "Звёзды и награды", text: "Чем меньше ходов, тем больше звёзд. Звёзды открывают новые уровни, режимы и темы, а каждый день ждёт новое поле." },
+    { icon: "⭐", title: "Звёзды и награды", text: "Чем меньше ходов, тем больше звёзд. Звёзды открывают уровни, а на счёте ими платят в магазине за режимы, темы и рубашки. Больше всего звёзд даёт режим ♾️." },
     { icon: "📲", title: "Как приложение", text: "В Safari нажми «Поделиться» и выбери «На экран Домой», чтобы запускать игру с иконкой, как приложение." }
   ];
-  var HINT_SHARE = 0.5, HINTS_PER_LEVEL = 3, HINT_CAP = 5;
+  var HINT_SHARE = 0.5, HINTS_PER_LEVEL = 3, HINT_CAP = 7;
   // На своём хостинге кнопка «Поделиться» отправляет адрес самой страницы,
   // а внутри Claude остаётся ссылка на артефакт.
   var SHARE_URL = "https://claude.ai/artifact/Wy8qCK9En9thpULSMJCtf2";
@@ -711,9 +780,10 @@
   function defMeta() {
     return {
       ach: {},
-      stats: { games: 0, wins: 0, losses: 0, matches: 0, seconds: 0, bestStreak: 0, botWins: 0, themeGames: {}, themeWins: {} },
+      stats: { games: 0, wins: 0, losses: 0, matches: 0, seconds: 0, bestStreak: 0, botWins: 0, infBest: 0, themeGames: {}, themeWins: {} },
       daily: { best: null, date: "", streak: 0, last: "" },
-      unlocked: { themes: ["animals"], modes: ["solo", "duo"] },
+      unlocked: { themes: ["animals"], modes: ["solo", "duo"], backs: ["classic"] },
+      bank: 0, spent: 0, extraHints: 0,
       tutorial: false, back: "classic", botLevel: "mid"
     };
   }
@@ -879,7 +949,7 @@
   }
   function openSheet(id) { $(id).classList.add("show"); }
   function closeSheets() {
-    ["modesSheet", "settingsSheet", "shareSheet", "achSheet", "statsSheet", "acctSheet"].forEach(function (id) { $(id).classList.remove("show"); });
+    ["modesSheet", "settingsSheet", "shareSheet", "achSheet", "statsSheet", "acctSheet", "shopSheet", "lbSheet"].forEach(function (id) { $(id).classList.remove("show"); });
   }
 
   /* ================= Меню ================= */
@@ -894,15 +964,23 @@
     var box = $("levels");
     box.innerHTML = "";
     var free = mode === "duo" || mode === "bot";
-    var goal = nextGoal();
-    $("total").innerHTML = '<span class="s">★</span> ' + totalStars() +
-      (goal ? " · дальше: " + goal.t + " за " + goal.c + "★" : " · всё открыто 🎉");
+    $("total").innerHTML = '<span class="s">★</span> ' + balance() + " на счёте, всего заработано " + lifetime();
+    $("shopBal").textContent = "★ " + balance();
     $("modeLabel").textContent = modeInfo().icon + " " + modeInfo().name;
     $("themeLabel").textContent = THEMES[theme].icon + " " + THEMES[theme].name;
     $("heroRow").textContent = THEMES[theme].items.slice(0, 3).join("");
     $("dailyInfo").textContent = dailyInfoText();
 
+    if (mode === "inf") {
+      var it = document.createElement("button");
+      it.className = "lvl inf-tile";
+      it.innerHTML = '<span class="num">♾️</span><span class="info">Один бесконечный уровень: проходи этапы и копи звёзды</span>' +
+        '<span class="stars">Рекорд: ' + (meta.stats.infBest || 0) + " этапов</span>";
+      it.addEventListener("click", startInfRun);
+      box.appendChild(it);
+    }
     LEVELS.forEach(function (lv, i) {
+      if (mode === "inf") return;
       var b = document.createElement("button");
       b.className = "lvl";
       var locked = !free && i >= progress.unlocked;
@@ -939,10 +1017,11 @@
     qsa("#lookSeg button").forEach(function (b) { b.classList.toggle("on", b.dataset.look === l); });
   }
   function applyBack(id) {
+    if (meta.unlocked.backs.indexOf(id) < 0) id = "classic";
     meta.back = id;
     saveMeta();
     document.body.setAttribute("data-back", id);
-    qsa(".swatch").forEach(function (b) { b.classList.toggle("on", b.dataset.b === id); });
+    renderBackSwatches();
   }
   function applyBotLevel(l) {
     meta.botLevel = l;
@@ -958,9 +1037,9 @@
       var open = isModeOpen(m.id);
       b.className = "mode-item" + (m.id === mode ? " on" : "") + (open ? "" : " locked");
       b.innerHTML = '<span class="mi">' + (open ? m.icon : "🔒") + "</span><div><b>" + m.name + "</b><span>" +
-        (open ? m.desc : "Нужно " + MODE_COST[m.id] + " ★, у тебя " + totalStars()) + "</span></div>";
+        (open ? m.desc : "Купить в магазине: " + MODE_COST[m.id] + " ★") + "</span></div>";
       b.addEventListener("click", function () {
-        if (!isModeOpen(m.id)) { showToast("🔒 Нужно " + MODE_COST[m.id] + " ★, у тебя " + totalStars()); return; }
+        if (!isModeOpen(m.id)) { showToast("🔒 Режим продаётся в магазине: " + MODE_COST[m.id] + " ★"); closeSheets(); openShop(); return; }
         setMode(m.id);
         if (m.id === "bot") buildModeList(); else closeSheets();
       });
@@ -1001,6 +1080,7 @@
       ["Лучшая серия пар", s.bestStreak],
       ["Любимая тема", fav],
       ["Побед над ботом", s.botWins],
+      ["Лучший забег ♾️ (этапов)", s.infBest || 0],
       ["Серия ежедневных вызовов", dayStreak]
     ];
     $("statsList").innerHTML = rows.map(function (r) {
@@ -1028,6 +1108,14 @@
 
   /* ================= Игра ================= */
   function renderHud() {
+    if (pm === "inf") {
+      movesEl.textContent = "❤️ " + infHearts;
+      timeEl.textContent = infStage;
+      bestEl.textContent = infRunStars;
+      $("movesStat").classList.toggle("low", infHearts <= 1);
+      $("timeStat").classList.remove("low");
+      return;
+    }
     var p = curLv.pairs, left = tl(p) - seconds;
     movesEl.textContent = pm === "moves" ? moves + "/" + ml(p) : moves;
     timeEl.textContent = pm === "time" ? Math.max(0, left) : seconds;
@@ -1051,6 +1139,21 @@
   function stopTimer() { clearInterval(timer); timer = null; }
   function leaveGame() { gid++; over = true; stopTimer(); }
 
+  /* ---------- Бесконечный режим ---------- */
+  var INF_SEQ = [3, 4, 5, 6, 8, 9, 10, 12, 15, 18, 21];
+  var INF_COLS = { 3: 3, 4: 4, 5: 5, 6: 4, 8: 4, 9: 6, 10: 5, 12: 6, 15: 6, 18: 6, 21: 6 };
+  var INF_MAX = 5;
+  var infStage = 1, infHearts = INF_MAX, infRunStars = 0, infCleared = 0;
+  function infLevel(stage) {
+    var pairs = INF_SEQ[Math.min(stage, INF_SEQ.length) - 1];
+    var lv = { cols: INF_COLS[pairs], pairs: pairs };
+    if (stage >= 8) lv.shuffle = 4;
+    if (stage >= 10) { lv.shuffle = 3; lv.fast = true; }
+    return lv;
+  }
+  function beginInf() { begin(infLevel(infStage), infStage - 1, false, false); }
+  function startInfRun() { infStage = 1; infHearts = INF_MAX; infRunStars = 0; infCleared = 0; beginInf(); }
+
   function begin(lv, idx, daily, keepStart) {
     gid++;
     cur = idx; curLv = lv; isDaily = daily;
@@ -1060,7 +1163,7 @@
     stopTimer();
     first = null; lock = false; over = false;
     moves = 0; found = 0; seconds = 0; misses = 0; streak = 0; hintsUsed = 0; mem = {};
-    hints = HINTS_PER_LEVEL; scores = [0, 0];
+    hints = HINTS_PER_LEVEL + (meta.extraHints || 0); scores = [0, 0];
     var two = twoPlayers();
     turn = two ? startTurn : 0;
     $("overlay").classList.remove("show");
@@ -1069,13 +1172,18 @@
       $("gameTitle").textContent = "Ежедневный вызов";
       $("gameMode").textContent = "📅 " + dateKey() + " " + THEMES[gameTheme].icon;
       bestEl.textContent = (meta.daily.date === dateKey() && meta.daily.best !== null) ? meta.daily.best : "—";
+    } else if (pm === "inf") {
+      $("gameTitle").textContent = "Этап " + (idx + 1);
+      $("gameMode").textContent = "♾️ Бесконечность" + modIcons(lv);
     } else {
       $("gameTitle").textContent = "Уровень " + (idx + 1);
       $("gameMode").textContent = modeInfo().icon + " " + modeInfo().name +
         (pm === "bot" ? ", " + BOT_LEVELS[meta.botLevel].name.toLowerCase() : "") + modIcons(lv);
       bestEl.textContent = progress.best[idx] || "—";
     }
-    $("lblTime").textContent = pm === "time" ? "осталось, с" : "секунд";
+    $("lblTime").textContent = pm === "time" ? "осталось, с" : pm === "inf" ? "этап" : "секунд";
+    $("lblMoves").textContent = pm === "inf" ? "жизней" : "ходов";
+    $("lblBest").textContent = pm === "inf" ? "звёзд за забег" : "рекорд";
     $("stats").classList.toggle("hidden", two);
     $("players").classList.toggle("hidden", !two);
     $("hint").classList.toggle("hidden", two || daily);
@@ -1157,6 +1265,8 @@
       lock = true;
       sfx.miss();
       misses++; streak = 0;
+      var dead = false;
+      if (pm === "inf") { infHearts--; dead = infHearts <= 0; renderHud(); }
       if (twoPlayers()) { turn = 1 - turn; updatePlayers(); }
       if (outOfMoves) stopTimer();
       setTimeout(function () {
@@ -1166,6 +1276,7 @@
         b.setAttribute("aria-label", "Закрытая карточка");
         if (over) return;
         if (outOfMoves) { lose("moves"); return; }
+        if (dead) { lose("inf"); return; }
         if (curLv.shuffle && misses % curLv.shuffle === 0) shuffleClosed();
         lock = false;
         if (pm === "bot" && turn === 1) scheduleBot();
@@ -1245,13 +1356,15 @@
     s.seconds += seconds;
     s.themeGames[gameTheme] = (s.themeGames[gameTheme] || 0) + 1;
   }
-  function modal(title, starsN, text, nextVisible, againText) {
+  function modal(title, starsN, text, nextVisible, againText, nextText) {
     $("winTitle").textContent = title;
     $("winStars").innerHTML = starsN ? bigStars(starsN) : "";
     $("winStars").classList.toggle("hidden", !starsN);
     $("duoResult").classList.add("hidden");
     $("winText").textContent = text;
     $("next").classList.toggle("hidden", !nextVisible);
+    $("next").textContent = nextText || "Следующий уровень";
+    $("again").classList.remove("hidden");
     $("again").textContent = againText;
     $("overlay").classList.add("show");
   }
@@ -1262,6 +1375,7 @@
     stopTimer();
     countGame(true);
     if (twoPlayers()) { winTwo(); saveMeta(); return; }
+    if (pm === "inf") { winInf(); return; }
 
     var pairs = curLv.pairs, stars, msg;
     if (pm === "time") {
@@ -1323,8 +1437,14 @@
     stopTimer();
     countGame(false);
     saveMeta();
-    modal(reason === "time" ? "Время вышло ⏰" : "Ходы закончились 😕", 0,
-      "Найдено пар: " + found + " из " + curLv.pairs + ". Попробуешь ещё раз?", false, "Попробовать снова");
+    if (reason === "inf") {
+      modal("Забег окончен 💔", 0,
+        "Этапов пройдено: " + infCleared + ", звёзд за забег: " + infRunStars + ". Рекорд: " + meta.stats.infBest + ".",
+        false, "Новый забег");
+    } else {
+      modal(reason === "time" ? "Время вышло ⏰" : "Ходы закончились 😕", 0,
+        "Найдено пар: " + found + " из " + curLv.pairs + ". Попробуешь ещё раз?", false, "Попробовать снова");
+    }
     sfx.lose();
   }
 
@@ -1424,14 +1544,18 @@
   /* ================= Кнопки ================= */
   function toMenu() { leaveGame(); $("overlay").classList.remove("show"); renderMenu(); }
   function restartCurrent() {
-    if (isDaily) begin(DAILY_LEVEL, 0, true, false);
+    if (pm === "inf") startInfRun();
+    else if (isDaily) begin(DAILY_LEVEL, 0, true, false);
     else begin(LEVELS[cur], cur, false, false);
   }
 
   $("back").addEventListener("click", toMenu);
   $("toMenu").addEventListener("click", toMenu);
   $("restart").addEventListener("click", restartCurrent);
-  $("next").addEventListener("click", function () { begin(LEVELS[cur + 1], cur + 1, false, false); });
+  $("next").addEventListener("click", function () {
+    if (pm === "inf") { infStage++; beginInf(); }
+    else begin(LEVELS[cur + 1], cur + 1, false, false);
+  });
   $("again").addEventListener("click", function () {
     if (!isDaily && twoPlayers()) { startTurn = 1 - startTurn; begin(curLv, cur, false, true); }
     else restartCurrent();
@@ -1468,6 +1592,8 @@
   qsa("#botSeg button").forEach(function (b) { b.addEventListener("click", function () { applyBotLevel(b.dataset.bot); }); });
 
   twoTap($("reset"), "Нажми ещё раз, чтобы сбросить", function () {
+    meta.bank = (meta.bank || 0) + totalStars();   // звёзды остаются на счёте
+    saveMeta();
     Object.keys(THEMES).forEach(function (k) { allProgress[k] = blank(); });
     progress = allProgress[theme];
     save();
@@ -1482,7 +1608,8 @@
 
   /* ---------- Звёзды открывают темы и режимы ---------- */
   var THEME_COST = { animals: 0, space: 4, cars: 8, food: 12, sports: 16, faces: 20, flags: 25 };
-  var MODE_COST  = { solo: 0, duo: 0, bot: 6, time: 10, moves: 14 };
+  var MODE_COST  = { solo: 0, duo: 0, bot: 6, time: 10, moves: 14, inf: 5 };
+  var BACK_COST  = { classic: 0, sunset: 6, ocean: 10, mint: 14, night: 18 };
 
   function totalStars() {
     var s = 0;
@@ -1503,28 +1630,7 @@
     });
     return best;
   }
-  function checkUnlocks(silent) {
-    var t = totalStars(), gained = [];
-    Object.keys(THEMES).forEach(function (k) {
-      if (!isThemeOpen(k) && t >= THEME_COST[k]) {
-        meta.unlocked.themes.push(k);
-        gained.push("🔓 Открыта тема «" + THEMES[k].name + "»");
-      }
-    });
-    MODES.forEach(function (m) {
-      if (!isModeOpen(m.id) && t >= MODE_COST[m.id]) {
-        meta.unlocked.modes.push(m.id);
-        gained.push("🔓 Открыт режим «" + m.name + "»");
-      }
-    });
-    if (!gained.length) return;
-    saveMeta();
-    if (!silent) {
-      gained.forEach(function (g) { showToast(g); });
-      sfx.award();
-      renderThemeButtons();
-    }
-  }
+  function checkUnlocks() {}   // открытия теперь покупаются в магазине
 
   function renderThemeButtons() {
     var box = $("themes");
@@ -1537,7 +1643,7 @@
       b.innerHTML = '<span class="ti">' + (open ? THEMES[k].icon : "🔒") + "</span><span>" + THEMES[k].name +
         (open ? "" : "<br>" + THEME_COST[k] + " ★") + "</span>";
       b.addEventListener("click", function () {
-        if (!isThemeOpen(k)) { showToast("🔒 Нужно " + THEME_COST[k] + " ★, у тебя " + totalStars()); return; }
+        if (!isThemeOpen(k)) { showToast("🔒 Тема продаётся в магазине: " + THEME_COST[k] + " ★"); closeSheets(); openShop(); return; }
         setTheme(k);
       });
       box.appendChild(b);
@@ -1558,20 +1664,173 @@
       action();
     });
   }
-  BACKS.forEach(function (bk) {
-    var b = document.createElement("button");
-    b.className = "swatch";
-    b.dataset.b = bk.id;
-    b.style.background = bk.css;
-    b.setAttribute("aria-label", "Рубашка: " + bk.name);
-    b.addEventListener("click", function () { applyBack(bk.id); });
-    $("backs").appendChild(b);
-  });
+  function renderBackSwatches() {
+    var box = $("backs");
+    box.innerHTML = "";
+    BACKS.forEach(function (bk) {
+      var own = meta.unlocked.backs.indexOf(bk.id) >= 0;
+      var b = document.createElement("button");
+      b.className = "swatch" + (bk.id === meta.back ? " on" : "") + (own ? "" : " locked");
+      b.dataset.b = bk.id;
+      b.style.background = bk.css;
+      b.setAttribute("aria-label", "Рубашка: " + bk.name + (own ? "" : ", продаётся в магазине"));
+      if (!own) b.innerHTML = '<span class="lk">🔒</span>';
+      b.addEventListener("click", function () {
+        if (!own) { showToast("🔒 Рубашка продаётся в магазине: " + BACK_COST[bk.id] + " ★"); closeSheets(); openShop(); return; }
+        applyBack(bk.id);
+      });
+      box.appendChild(b);
+    });
+  }
 
   // Запрет «резинового» скролла за пределами экранов и панелей на iPhone
   document.addEventListener("touchmove", function (e) {
     if (!e.target.closest(".screen, .sheet")) e.preventDefault();
   }, { passive: false });
+
+  /* ================= Победа в бесконечном режиме ================= */
+  function winInf() {
+    var pairs = curLv.pairs;
+    var stars = misses === 0 ? 3 : misses <= Math.max(1, Math.floor(pairs / 4)) ? 2 : 1;
+    meta.bank = (meta.bank || 0) + stars;
+    infRunStars += stars;
+    infCleared++;
+    if (infCleared > (meta.stats.infBest || 0)) meta.stats.infBest = infCleared;
+    infHearts = Math.min(INF_MAX, infHearts + 1);
+    saveMeta();
+    if (infCleared >= 5) unlock("inf5");
+    if (infCleared >= 10) unlock("inf10");
+    modal("Этап " + infStage + " пройден! 🎉", stars,
+      "+" + stars + " " + (stars === 1 ? "звезда" : "звезды") + ". За забег: " + infRunStars + " ★. Жизней: " + infHearts + ".",
+      true, "", "Следующий этап ▶");
+    $("again").classList.add("hidden");
+    sfx.win();
+    confetti();
+  }
+
+  /* ================= Магазин ================= */
+  function lifetime() { return totalStars() + (meta.bank || 0); }
+  function balance() { return lifetime() - (meta.spent || 0); }
+  var HINT_PRICES = [8, 16];
+
+  function shopSections() {
+    var modes = MODES.filter(function (m) { return MODE_COST[m.id] > 0; }).map(function (m) {
+      return { icon: m.icon, name: m.name, desc: m.desc, price: MODE_COST[m.id], owned: isModeOpen(m.id),
+               give: function () { meta.unlocked.modes.push(m.id); } };
+    });
+    var themes = Object.keys(THEMES).filter(function (k) { return THEME_COST[k] > 0; }).map(function (k) {
+      return { icon: THEMES[k].icon, name: "Тема «" + THEMES[k].name + "»", desc: "21 картинка для карточек",
+               price: THEME_COST[k], owned: isThemeOpen(k),
+               give: function () { meta.unlocked.themes.push(k); } };
+    });
+    var backs = BACKS.filter(function (b) { return BACK_COST[b.id] > 0; }).map(function (b) {
+      var own = meta.unlocked.backs.indexOf(b.id) >= 0, on = meta.back === b.id;
+      return { swatch: b.css, name: "Рубашка «" + b.name + "»",
+               desc: on ? "Сейчас надета" : (own ? "Куплена" : "Новый вид оборота карточек"),
+               price: BACK_COST[b.id], owned: own, equipped: on,
+               give: function () { meta.unlocked.backs.push(b.id); },
+               equip: function () { applyBack(b.id); } };
+    });
+    var extra = meta.extraHints || 0;
+    var ups = [{ icon: "💡", name: "Запас подсказок", desc: "+1 подсказка на каждом уровне навсегда (куплено " + extra + " из 2)",
+                 price: HINT_PRICES[extra] || 0, owned: extra >= 2,
+                 give: function () { meta.extraHints = (meta.extraHints || 0) + 1; } }];
+    return [["Режимы", modes], ["Темы", themes], ["Рубашки", backs], ["Улучшения", ups]];
+  }
+
+  function buyItem(it) {
+    if (it.price > balance()) {
+      showToast("Не хватает " + (it.price - balance()) + " ★. Копи звёзды на уровнях и в режиме ♾️");
+      return;
+    }
+    meta.spent = (meta.spent || 0) + it.price;
+    it.give();
+    saveMeta();
+    unlock("buyer");
+    sfx.award();
+    showToast("🛒 Куплено: " + it.name);
+    if (it.equip) it.equip();
+    renderThemeButtons();
+    renderMenu();
+    renderShop();
+  }
+
+  function renderShop() {
+    var box = $("shopList");
+    box.innerHTML = "";
+    $("shopBalance").textContent = "★ " + balance();
+    shopSections().forEach(function (sec) {
+      var hd = document.createElement("div");
+      hd.className = "shop-h";
+      hd.textContent = sec[0];
+      box.appendChild(hd);
+      sec[1].forEach(function (it) {
+        var row = document.createElement("div");
+        row.className = "shop-item";
+        var icon = it.swatch ? '<span class="swatch-mini" style="background:' + it.swatch + '"></span>' : it.icon;
+        row.innerHTML = '<span class="si">' + icon + '</span><div class="st"><b>' + it.name + "</b><span>" + it.desc + "</span></div>";
+        var btn = document.createElement("button");
+        btn.className = "buy";
+        if (it.owned && it.equip && !it.equipped) {
+          btn.textContent = "Надеть";
+          btn.addEventListener("click", function () { it.equip(); renderShop(); });
+        } else if (it.owned) {
+          btn.textContent = "✓";
+          btn.className = "buy done";
+          btn.disabled = true;
+        } else {
+          btn.textContent = "★ " + it.price;
+          if (it.price > balance()) btn.className = "buy cant";
+          btn.addEventListener("click", function () { buyItem(it); });
+        }
+        row.appendChild(btn);
+        box.appendChild(row);
+      });
+    });
+  }
+  function openShop() { renderShop(); openSheet("shopSheet"); }
+
+  /* ================= Лидеры (игроки с этого устройства) ================= */
+  var lbTab = "stars";
+  function boardRows() {
+    var rows = [], myId = currentUser ? currentUser.id : "";
+    function add(name, prefix, id) {
+      var prog = {}, m = {};
+      try { prog = JSON.parse(rawGet(prefix + KEY3) || "{}") || {}; } catch (e) {}
+      try { m = JSON.parse(rawGet(prefix + META_KEY) || "{}") || {}; } catch (e) {}
+      var stars = 0;
+      Object.keys(prog).forEach(function (k) {
+        var t = prog[k];
+        if (t && t.stars) t.stars.forEach(function (n) { stars += n || 0; });
+      });
+      stars += m.bank || 0;
+      rows.push({ name: name, stars: stars, inf: (m.stats && m.stats.infBest) || 0, me: id === myId });
+    }
+    add("Гость", "", "");
+    var accs = getAccounts();
+    Object.keys(accs).forEach(function (id) { add(accs[id].nick, pfxFor(id), id); });
+    return rows;
+  }
+  function renderLb() {
+    qsa("#lbTabs button").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === lbTab); });
+    var rows = boardRows().filter(function (r) { return r.stars > 0 || r.inf > 0 || r.me; });
+    rows.sort(function (a, b) {
+      return lbTab === "stars" ? (b.stars - a.stars) || (b.inf - a.inf) : (b.inf - a.inf) || (b.stars - a.stars);
+    });
+    var medals = ["🥇", "🥈", "🥉"];
+    $("lbList").innerHTML = rows.length ? rows.map(function (r, i) {
+      return '<div class="lb-row' + (r.me ? " me" : "") + '"><span class="lb-rank">' + (medals[i] || (i + 1) + ".") + "</span>" +
+        '<span class="lb-name">' + r.name + (r.me ? " (ты)" : "") + "</span>" +
+        '<span class="lb-val">' + (lbTab === "stars" ? "★ " + r.stars : "♾️ " + r.inf) + "</span></div>";
+    }).join("") : '<p class="share-note">Пока пусто. Пройди уровень!</p>';
+  }
+  function openLb() { renderLb(); openSheet("lbSheet"); }
+
+  $("openShop").addEventListener("click", openShop);
+  $("openLb").addEventListener("click", openLb);
+  qsa("#lbTabs button").forEach(function (b) {
+    b.addEventListener("click", function () { lbTab = b.dataset.tab; renderLb(); });
+  });
 
   /* ================= Аккаунты (хранятся на этом устройстве) ================= */
   var ACC_KEY = "memory-accounts-v1", SESSION_KEY = "memory-session";
