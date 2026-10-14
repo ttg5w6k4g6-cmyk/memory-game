@@ -313,6 +313,8 @@
   #tutText { white-space: pre-line; text-align: left; }
   .set-sub { font-size: .8rem; color: var(--muted); margin-top: 2px; }
 
+  .swatch { box-shadow: inset 0 0 0 1px rgba(0,0,0,.14); }
+
   /* Магазин, лидеры, бесконечность */
   .shop-btn {
     display: flex; align-items: center; justify-content: space-between; width: 100%;
@@ -486,6 +488,18 @@
     <div class="set-row">
       <div class="set-title">Рубашка карточек</div>
       <div class="backs" id="backs"></div>
+    </div>
+    <div class="set-row">
+      <div class="set-title">Цвет оформления</div>
+      <div class="backs" id="palettes"></div>
+    </div>
+    <div class="set-row inline">
+      <div><div class="set-title">Музыка</div><div class="set-sub" id="musicSub">Купи треки в магазине</div></div>
+      <button class="switch" id="musicSwitch" role="switch" aria-checked="false" aria-label="Музыка"><i></i></button>
+    </div>
+    <div class="set-row">
+      <div class="set-title">Трек</div>
+      <div class="themes" id="tracks"></div>
     </div>
     <div class="set-row inline">
       <div class="set-title">Звуки</div>
@@ -795,8 +809,9 @@
       ach: {},
       stats: { games: 0, wins: 0, losses: 0, matches: 0, seconds: 0, bestStreak: 0, botWins: 0, infBest: 0, themeGames: {}, themeWins: {} },
       daily: { best: null, date: "", streak: 0, last: "" },
-      unlocked: { themes: ["animals"], modes: ["solo", "duo"], backs: ["classic"] },
-      bank: 0, spent: 0, extraHints: 0,
+      unlocked: { themes: ["animals"], modes: ["solo", "duo"], backs: ["classic"], tracks: [], palettes: ["mint"] },
+      bank: 0, spent: 0, extraHints: 0, freezes: 0, pairShield: false,
+      musicOn: true, track: "", palette: "mint",
       tutorial: false, back: "classic", botLevel: "mid"
     };
   }
@@ -831,7 +846,7 @@
   var first = null, lock = false, over = false, gid = 0;
   var moves = 0, found = 0, seconds = 0, timer = null;
   var hints = HINTS_PER_LEVEL, hintsUsed = 0, turn = 0, scores = [0, 0];
-  var streak = 0, misses = 0, mem = {};
+  var streak = 0, misses = 0, mem = {}, shieldUsed = false;
   var grid = $("grid"), movesEl = $("moves"), timeEl = $("time"), bestEl = $("best");
 
   function twoPlayers() { return pm === "duo" || pm === "bot"; }
@@ -843,8 +858,8 @@
 
   /* ================= Звуки ================= */
   var AC = null;
-  function ac() {
-    if (!soundOn) return null;
+  function ac(force) {
+    if (!soundOn && !force) return null;
     try {
       if (!AC) {
         var C = window.AudioContext || window.webkitAudioContext;
@@ -909,6 +924,242 @@
     lsSet(SOUND_KEY, soundOn ? "on" : "off");
     updateSoundBtns();
     if (soundOn) sfx.flip();
+  }
+
+  /* ================= Цвета оформления ================= */
+  var PALETTES = [
+    { id: "mint",   name: "Мята",      light: { bg: "#dff3f0", accent: "#ff7a59", locked: "#c3dcd8" }, dark: { bg: "#14262f", accent: "#ff8f70", locked: "#1c3440" } },
+    { id: "sunset", name: "Закат",     light: { bg: "#fff1e6", accent: "#ff6b4a", locked: "#f3d6c4" }, dark: { bg: "#2a1a14", accent: "#ff8a6b", locked: "#3d2a21" } },
+    { id: "ocean",  name: "Океан",     light: { bg: "#e3f0ff", accent: "#2f7df6", locked: "#c5d9f3" }, dark: { bg: "#0f1f33", accent: "#5aa0ff", locked: "#1b3350" } },
+    { id: "forest", name: "Лес",       light: { bg: "#e6f4e1", accent: "#3f9b4a", locked: "#c9e0c2" }, dark: { bg: "#12241a", accent: "#5fc46e", locked: "#1f3a2a" } },
+    { id: "rose",   name: "Роза",      light: { bg: "#ffe8f0", accent: "#e84a86", locked: "#f5c9d9" }, dark: { bg: "#2a1520", accent: "#ff6fa5", locked: "#402030" } },
+    { id: "grape",  name: "Виноград",  light: { bg: "#efe8ff", accent: "#8a5cf5", locked: "#d8ccf3" }, dark: { bg: "#1d1533", accent: "#a98bff", locked: "#2f2550" } }
+  ];
+  (function buildPaletteCss() {
+    var css = "";
+    PALETTES.forEach(function (p) {
+      if (p.id === "mint") return;
+      function vars(o) { return "--bg:" + o.bg + ";--accent:" + o.accent + ";--locked:" + o.locked + ";"; }
+      css += ':root[data-palette="' + p.id + '"]{' + vars(p.light) + "}";
+      css += '@media (prefers-color-scheme: dark){:root:not([data-theme="light"])[data-palette="' + p.id + '"]{' + vars(p.dark) + "}}";
+      css += ':root[data-theme="dark"][data-palette="' + p.id + '"]{' + vars(p.dark) + "}";
+    });
+    var st = document.createElement("style");
+    st.textContent = css;
+    document.head.appendChild(st);
+  })();
+
+  function applyPalette(id) {
+    if (meta.unlocked.palettes.indexOf(id) < 0) id = "mint";
+    meta.palette = id;
+    saveMeta();
+    if (id === "mint") document.documentElement.removeAttribute("data-palette");
+    else document.documentElement.setAttribute("data-palette", id);
+    renderPaletteSwatches();
+    updateThemeColor();
+  }
+  function renderPaletteSwatches() {
+    var box = $("palettes");
+    box.innerHTML = "";
+    PALETTES.forEach(function (p) {
+      var own = meta.unlocked.palettes.indexOf(p.id) >= 0;
+      var b = document.createElement("button");
+      b.className = "swatch" + (p.id === meta.palette ? " on" : "") + (own ? "" : " locked");
+      b.style.background = "linear-gradient(135deg," + p.light.bg + " 50%," + p.light.accent + " 50%)";
+      b.setAttribute("aria-label", "Цвет: " + p.name + (own ? "" : ", продаётся в магазине"));
+      if (!own) b.innerHTML = '<span class="lk">🔒</span>';
+      b.addEventListener("click", function () {
+        if (!own) { showToast("🔒 Цвет продаётся в магазине: " + PALETTE_COST[p.id] + " ★"); closeSheets(); openShop(); return; }
+        applyPalette(p.id);
+      });
+      box.appendChild(b);
+    });
+  }
+
+  /* ================= Фоновая музыка (синтез, без файлов) ================= */
+  var mus = { timer: null, step: 0, next: 0, gain: null, noise: null, running: false };
+  function mhz(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+  function mnote(t, midi, dur, type, vol, atk) {
+    var a = ac(true);
+    if (!a || !mus.gain) return;
+    var o = a.createOscillator(), g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(mhz(midi), t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + (atk || 0.01));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(mus.gain);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function mkick(t, vol) {
+    var a = ac(true);
+    if (!a || !mus.gain) return;
+    var o = a.createOscillator(), g = a.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g); g.connect(mus.gain);
+    o.start(t); o.stop(t + 0.2);
+  }
+  function mhat(t, vol) {
+    var a = ac(true);
+    if (!a || !mus.gain) return;
+    if (!mus.noise) {
+      var len = Math.floor(a.sampleRate * 0.1), buf = a.createBuffer(1, len, a.sampleRate), ch = buf.getChannelData(0);
+      for (var i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+      mus.noise = buf;
+    }
+    var s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+    s.buffer = mus.noise;
+    f.type = "highpass"; f.frequency.value = 7000;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    s.connect(f); f.connect(g); g.connect(mus.gain);
+    s.start(t); s.stop(t + 0.08);
+  }
+
+  var TRACKS = [
+    { id: "fun", name: "Весёлая", icon: "🎵", bpm: 126, sub: 2, play: function (s, t, d) {
+        var bar = Math.floor(s / 8) % 4, i = s % 8;
+        var chords = [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]], roots = [36, 31, 33, 29];
+        var arp = [0, 1, 2, 1, 0, 1, 2, 1], c = chords[bar];
+        mnote(t, c[arp[i]] + 12, d * 1.6, "triangle", 0.22);
+        if (i === 0 || i === 4) { mnote(t, roots[bar], d * 3, "square", 0.1); mkick(t, 0.5); }
+        if (i % 2 === 1) mhat(t, 0.1);
+        if (i === 6) mnote(t, c[2] + 24, d * 2, "sine", 0.13);
+      } },
+    { id: "chill", name: "Спокойная", icon: "🌙", bpm: 76, sub: 2, play: function (s, t, d) {
+        var bar = Math.floor(s / 8) % 4, i = s % 8;
+        var chords = [[57, 60, 64], [53, 57, 60], [60, 64, 67], [55, 59, 62]];
+        var mel = [[76, 0, 72, 0, 74, 0, 69, 0], [72, 0, 69, 0, 72, 0, 74, 0], [76, 0, 79, 0, 76, 0, 72, 0], [74, 0, 72, 0, 69, 0, 0, 0]];
+        var c = chords[bar];
+        if (i === 0) {
+          c.forEach(function (n) { mnote(t, n, d * 8, "sine", 0.1, 0.4); });
+          mnote(t, c[0] - 24, d * 8, "sine", 0.18, 0.1);
+        }
+        if (mel[bar][i]) mnote(t, mel[bar][i], d * 2.5, "triangle", 0.11, 0.02);
+        if (i === 0 || i === 5) mkick(t, 0.32);
+        if (i % 2 === 1) mhat(t, 0.06);
+      } },
+    { id: "space", name: "Космос", icon: "🪐", bpm: 52, sub: 2, play: function (s, t, d) {
+        var bar = Math.floor(s / 8) % 4, i = s % 8;
+        var chords = [[50, 57, 62, 65], [46, 53, 58, 62], [48, 55, 60, 64], [45, 52, 57, 60]];
+        var c = chords[bar];
+        if (i === 0) {
+          c.forEach(function (n) { mnote(t, n, d * 8.5, "sine", 0.09, 1.2); });
+          mnote(t, c[0] - 12, d * 8.5, "triangle", 0.1, 1.5);
+        }
+        if (i === 2 || i === 5 || i === 7) mnote(t, [81, 84, 86, 88, 91][(s * 3 + i) % 5], d * 2.5, "sine", 0.07, 0.02);
+      } },
+    { id: "retro", name: "8-бит", icon: "🕹️", bpm: 150, sub: 4, play: function (s, t, d) {
+        var bar = Math.floor(s / 16) % 2, i = s % 16;
+        var mel = [[72, 0, 76, 0, 79, 0, 76, 0, 74, 0, 77, 0, 81, 0, 77, 0], [76, 0, 79, 0, 83, 0, 79, 0, 77, 0, 74, 0, 72, 0, 0, 0]];
+        var bass = [48, 48, 53, 55];
+        if (mel[bar][i]) mnote(t, mel[bar][i], d * 1.8, "square", 0.08);
+        if (i % 4 === 0) mnote(t, bass[(s / 4 | 0) % 4], d * 3, "square", 0.08);
+        if (i % 8 === 0) mkick(t, 0.4);
+        if (i % 4 === 2) mhat(t, 0.07);
+      } }
+  ];
+  var MUSIC_PRICE = MUSIC_COST;
+
+  function currentTrack() { return TRACKS.filter(function (t) { return t.id === meta.track; })[0] || null; }
+  function musicWanted() {
+    return !!(meta.musicOn && meta.track && meta.unlocked.tracks.indexOf(meta.track) >= 0 && !document.hidden);
+  }
+  function musicTick() {
+    var a = ac(true), tr = currentTrack();
+    if (!a || !mus.running || !tr) return;
+    var d = 60 / tr.bpm / tr.sub;
+    if (mus.next < a.currentTime) mus.next = a.currentTime + 0.05;
+    while (mus.next < a.currentTime + 0.35) {
+      tr.play(mus.step, mus.next, d);
+      mus.step++;
+      mus.next += d;
+    }
+  }
+  function musicStart() {
+    if (mus.running || !musicWanted()) return;
+    var a = ac(true);
+    if (!a) return;
+    mus.gain = a.createGain();
+    mus.gain.gain.setValueAtTime(0.0001, a.currentTime);
+    mus.gain.gain.linearRampToValueAtTime(0.32, a.currentTime + 0.4);
+    mus.gain.connect(a.destination);
+    mus.running = true;
+    mus.step = 0;
+    mus.next = a.currentTime + 0.1;
+    mus.timer = setInterval(musicTick, 120);
+  }
+  function musicStop() {
+    if (!mus.running) return;
+    mus.running = false;
+    clearInterval(mus.timer);
+    mus.timer = null;
+    var old = mus.gain;
+    mus.gain = null;
+    try {
+      old.gain.cancelScheduledValues(AC.currentTime);
+      old.gain.setValueAtTime(old.gain.value, AC.currentTime);
+      old.gain.linearRampToValueAtTime(0.0001, AC.currentTime + 0.25);
+      setTimeout(function () { try { old.disconnect(); } catch (e) {} }, 900);
+    } catch (e) {}
+  }
+  function musicKick() {
+    if (mus.running) {
+      try { if (AC && AC.state === "suspended") AC.resume(); } catch (e) {}
+      return;
+    }
+    musicStart();
+  }
+  document.addEventListener("click", musicKick);
+  document.addEventListener("touchend", musicKick);
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) musicStop(); else musicKick();
+  });
+
+  function selectTrack(id) {
+    meta.track = id;
+    meta.musicOn = true;
+    saveMeta();
+    renderTrackButtons();
+    updateMusicUi();
+    musicStop();
+    musicStart();
+  }
+  function toggleMusic() {
+    var owned = meta.unlocked.tracks;
+    if (!owned.length) { showToast("🎵 Музыку можно купить в магазине"); closeSheets(); openShop(); return; }
+    meta.musicOn = !meta.musicOn;
+    if (meta.musicOn && owned.indexOf(meta.track) < 0) meta.track = owned[0];
+    saveMeta();
+    renderTrackButtons();
+    updateMusicUi();
+    if (meta.musicOn) { musicStop(); musicStart(); } else musicStop();
+  }
+  function updateMusicUi() {
+    var owned = meta.unlocked.tracks.length > 0, tr = currentTrack();
+    var sw = $("musicSwitch"), on = owned && meta.musicOn;
+    sw.classList.toggle("on", on);
+    sw.setAttribute("aria-checked", on ? "true" : "false");
+    $("musicSub").textContent = !owned ? "Купи треки в магазине" : (on && tr ? "Играет: " + tr.name : "Выключена");
+  }
+  function renderTrackButtons() {
+    var box = $("tracks");
+    box.innerHTML = "";
+    TRACKS.forEach(function (tr) {
+      var own = meta.unlocked.tracks.indexOf(tr.id) >= 0;
+      var b = document.createElement("button");
+      b.className = "theme-btn" + (own && meta.musicOn && meta.track === tr.id ? " on" : "") + (own ? "" : " locked");
+      b.innerHTML = '<span class="ti">' + (own ? tr.icon : "🔒") + "</span><span>" + tr.name + (own ? "" : "<br>" + MUSIC_COST[tr.id] + " ★") + "</span>";
+      b.addEventListener("click", function () {
+        if (!own) { showToast("🔒 Трек продаётся в магазине: " + MUSIC_COST[tr.id] + " ★"); closeSheets(); openShop(); return; }
+        selectTrack(tr.id);
+      });
+      box.appendChild(b);
+    });
   }
 
   /* ================= Сообщения и конфетти ================= */
@@ -987,10 +1238,18 @@
   }
 
   /* ================= Меню ================= */
+  function daysBetween(a, b) {
+    function pd(s) { var x = s.split("-"); return new Date(+x[0], +x[1] - 1, +x[2]); }
+    return Math.round((pd(b) - pd(a)) / 86400000);
+  }
+  // Серия жива, если пропущенных дней не больше, чем заморозок
+  function dailyAlive(d) {
+    return !!(d.last && d.streak && daysBetween(d.last, dateKey()) - 1 <= (meta.freezes || 0));
+  }
   function dailyInfoText() {
-    var d = meta.daily, t = dateKey();
-    if (d.last === t && d.date === t) return "Пройден ✓ Лучший: " + d.best + " ходов, серия дней: " + d.streak;
-    var s = (d.last === dateKey(-1) && d.streak) ? ", серия дней: " + d.streak : "";
+    var d = meta.daily, t = dateKey(), fz = meta.freezes ? ", ❄️ " + meta.freezes : "";
+    if (d.last === t && d.date === t) return "Пройден ✓ Лучший: " + d.best + " ходов, серия дней: " + d.streak + fz;
+    var s = dailyAlive(d) ? ", серия дней: " + d.streak + fz : "";
     return "Новое поле каждый день, " + THEMES[dailyThemeKey()].icon + " " + THEMES[dailyThemeKey()].name + s;
   }
 
@@ -1105,7 +1364,7 @@
     Object.keys(s.themeGames).forEach(function (k) {
       if (THEMES[k] && s.themeGames[k] > best) { best = s.themeGames[k]; fav = THEMES[k].icon + " " + THEMES[k].name; }
     });
-    var dayStreak = (d.last === dateKey() || d.last === dateKey(-1)) ? d.streak : 0;
+    var dayStreak = dailyAlive(d) ? d.streak : 0;
     var rows = [
       ["Сыграно партий", s.games],
       ["Побед", s.wins],
@@ -1197,7 +1456,7 @@
     if (!keepStart) startTurn = 0;
     stopTimer();
     first = null; lock = false; over = false;
-    moves = 0; found = 0; seconds = 0; misses = 0; streak = 0; hintsUsed = 0; mem = {};
+    moves = 0; found = 0; seconds = 0; misses = 0; streak = 0; hintsUsed = 0; mem = {}; shieldUsed = false;
     hints = HINTS_PER_LEVEL + (meta.extraHints || 0); scores = [0, 0];
     var two = twoPlayers();
     turn = two ? startTurn : 0;
@@ -1299,7 +1558,9 @@
     } else {
       lock = true;
       sfx.miss();
-      misses++; streak = 0;
+      misses++;
+      if (meta.pairShield && !shieldUsed && streak >= 2) { shieldUsed = true; showToast("🧊 Заморозка сохранила серию пар!"); }
+      else streak = 0;
       var dead = false;
       if (pm === "inf") { infHearts--; dead = infHearts <= 0; renderHud(); }
       if (twoPlayers()) { turn = 1 - turn; updatePlayers(); }
@@ -1432,7 +1693,17 @@
       if (d.date !== t) { d.date = t; d.best = null; }
       var firstToday = d.last !== t;
       if (d.best === null || moves < d.best) d.best = moves;
-      if (firstToday) { d.streak = d.last === dateKey(-1) ? d.streak + 1 : 1; d.last = t; }
+      if (firstToday) {
+        var missed = d.last ? daysBetween(d.last, t) - 1 : 0;
+        if (!d.last || !d.streak) d.streak = 1;
+        else if (missed <= 0) d.streak += 1;
+        else if (missed <= (meta.freezes || 0)) {
+          meta.freezes -= missed;
+          d.streak += 1;
+          showToast("❄️ Заморозка спасла серию дней! Осталось заморозок: " + meta.freezes);
+        } else d.streak = 1;
+        d.last = t;
+      }
       msg = "Ходов: " + moves + ", лучший сегодня: " + d.best + ". Серия дней: " + d.streak + " 🔥";
       unlock("daily");
       if (d.streak >= 3) unlock("daily3");
@@ -1639,6 +1910,7 @@
   $("openTut").addEventListener("click", function () { closeSheets(); openTutorial(); });
   $("openHome").addEventListener("click", function () { closeSheets(); openTutorial(isAndroid ? 5 : 4); });
   $("vibeSwitch").addEventListener("click", toggleVibe);
+  $("musicSwitch").addEventListener("click", toggleMusic);
   $("tutNext").addEventListener("click", function () {
     if (tutPage < TUT.length - 1) { tutPage++; renderTut(); } else closeTutorial();
   });
@@ -1646,8 +1918,11 @@
 
   /* ---------- Звёзды открывают темы и режимы ---------- */
   var THEME_COST = { animals: 0, space: 4, cars: 8, food: 12, sports: 16, faces: 20, flags: 25 };
-  var MODE_COST  = { solo: 0, duo: 0, bot: 6, time: 10, moves: 14, inf: 5 };
+  var MODE_COST  = { solo: 0, duo: 0, bot: 6, time: 10, moves: 14, inf: 20 };
   var BACK_COST  = { classic: 0, sunset: 6, ocean: 10, mint: 14, night: 18 };
+  var MUSIC_COST = { fun: 5, chill: 8, space: 11, retro: 14 };
+  var PALETTE_COST = { mint: 0, sunset: 6, ocean: 8, forest: 10, rose: 12, grape: 14 };
+  var FREEZE_PRICE = 6, FREEZE_MAX = 5, SHIELD_PRICE = 15;
 
   function totalStars() {
     var s = 0;
@@ -1773,7 +2048,32 @@
     var ups = [{ icon: "💡", name: "Запас подсказок", desc: "+1 подсказка на каждом уровне навсегда (куплено " + extra + " из 2)",
                  price: HINT_PRICES[extra] || 0, owned: extra >= 2,
                  give: function () { meta.extraHints = (meta.extraHints || 0) + 1; } }];
-    return [["Режимы", modes], ["Темы", themes], ["Рубашки", backs], ["Улучшения", ups]];
+    var fz = meta.freezes || 0;
+    ups.push(
+      { icon: "❄️", name: "Заморозка серии дней", desc: "Спасает серию ежедневных вызовов, если пропустишь день. У тебя: " + fz + " из " + FREEZE_MAX,
+        price: FREEZE_PRICE, owned: fz >= FREEZE_MAX,
+        give: function () { meta.freezes = (meta.freezes || 0) + 1; } },
+      { icon: "🧊", name: "Заморозка серии пар", desc: "Первая ошибка в игре не сбрасывает серию найденных пар подряд",
+        price: SHIELD_PRICE, owned: !!meta.pairShield,
+        give: function () { meta.pairShield = true; } }
+    );
+    var pals = PALETTES.filter(function (p) { return PALETTE_COST[p.id] > 0; }).map(function (p) {
+      var own = meta.unlocked.palettes.indexOf(p.id) >= 0, on = meta.palette === p.id;
+      return { swatch: "linear-gradient(135deg," + p.light.bg + " 50%," + p.light.accent + " 50%)", name: "Цвет «" + p.name + "»",
+               desc: on ? "Сейчас включён" : (own ? "Куплен" : "Другие цвета оформления"),
+               price: PALETTE_COST[p.id], owned: own, equipped: on,
+               give: function () { meta.unlocked.palettes.push(p.id); },
+               equip: function () { applyPalette(p.id); } };
+    });
+    var tracks = TRACKS.map(function (tr) {
+      var own = meta.unlocked.tracks.indexOf(tr.id) >= 0, on = meta.musicOn && meta.track === tr.id;
+      return { icon: tr.icon, name: "Музыка «" + tr.name + "»",
+               desc: on ? "Сейчас играет" : (own ? "Куплен" : "Фоновая мелодия для игры"),
+               price: MUSIC_COST[tr.id], owned: own, equipped: on,
+               give: function () { meta.unlocked.tracks.push(tr.id); },
+               equip: function () { selectTrack(tr.id); } };
+    });
+    return [["Режимы", modes], ["Темы", themes], ["Рубашки", backs], ["Цвета оформления", pals], ["Музыка", tracks], ["Улучшения", ups]];
   }
 
   function buyItem(it) {
@@ -1908,6 +2208,10 @@
   function applyAll() {
     applyLook(look);
     applyBack(meta.back);
+    applyPalette(meta.palette);
+    renderTrackButtons();
+    updateMusicUi();
+    musicStop();
     updateSoundBtns();
     setTheme(theme);
     updateAcctPill();
