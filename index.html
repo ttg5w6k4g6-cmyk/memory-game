@@ -2172,16 +2172,19 @@
     rpc("mg_leaderboard", { p_by: tab === "inf" ? "inf" : "stars" }).then(function (rows) {
       if (tab !== lbTab) return;
       var me = (currentUser ? currentUser.nick : "").toLowerCase();
-      rows = (rows || []).filter(function (r) { return (tab === "inf" ? r.inf_best : r.stars) > 0 || r.nick.toLowerCase() === me; });
+      rows = Array.isArray(rows) ? rows : [];
       var medals = ["🥇", "🥈", "🥉"];
       $("lbList").innerHTML = rows.length ? rows.map(function (r, i) {
         var mine = r.nick.toLowerCase() === me;
         return '<div class="lb-row' + (mine ? " me" : "") + '"><span class="lb-rank">' + (medals[i] || (i + 1) + ".") + "</span>" +
           '<span class="lb-name">' + esc(r.nick) + (mine ? " (ты)" : "") + "</span>" +
           '<span class="lb-val">' + (tab === "inf" ? "♾️ " + r.inf_best : "★ " + r.stars) + "</span></div>";
-      }).join("") : '<p class="share-note">Пока пусто. Пройди уровень!</p>';
-      $("lbNote").textContent = "🌐 Общий рейтинг всех игроков. Твой результат обновляется, когда ты сохраняешь прогресс.";
-    }, function () { renderLbLocal(); $("lbNote").textContent = localNote; });
+      }).join("") : '<p class="share-note">В рейтинге пока нет игроков.</p>';
+      $("lbNote").textContent = "🌐 Общий рейтинг всех игроков (" + rows.length + "). Твой результат обновляется, когда ты сохраняешь прогресс.";
+    }, function (e) {
+      $("lbList").innerHTML = '<p class="share-note">Не удалось загрузить общий рейтинг (' + esc(e && e.message ? e.message : "нет связи") + "). Попробуй позже.</p>";
+      $("lbNote").textContent = "";
+    });
   }
   function openLb() {
     openSheet("lbSheet");
