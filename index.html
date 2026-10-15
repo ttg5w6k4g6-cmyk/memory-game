@@ -709,13 +709,25 @@
     { cols: 6, pairs: 21, shuffle: 3, fast: true }
   ];
   var DAILY_LEVEL = { cols: 4, pairs: 8 };
+  // «Тройная проблема»: свои уровни. pairs = число троек, size = сколько одинаковых карточек в группе
+  var TRIPLE_LEVELS = [
+    { cols: 3, pairs: 2,  groups: 2,  size: 3 },
+    { cols: 3, pairs: 3,  groups: 3,  size: 3 },
+    { cols: 4, pairs: 4,  groups: 4,  size: 3 },
+    { cols: 5, pairs: 5,  groups: 5,  size: 3 },
+    { cols: 6, pairs: 6,  groups: 6,  size: 3 },
+    { cols: 6, pairs: 8,  groups: 8,  size: 3 },
+    { cols: 6, pairs: 10, groups: 10, size: 3, shuffle: 3 },
+    { cols: 6, pairs: 12, groups: 12, size: 3, shuffle: 3, fast: true }
+  ];
   var MODES = [
     { id: "solo",  icon: "🧩", name: "Классика",          desc: "Без ограничений, играй в своё удовольствие" },
     { id: "bot",   icon: "🤖", name: "Против бота",       desc: "Сыграй с компьютером и выбери его уровень" },
     { id: "duo",   icon: "👥", name: "На двоих",          desc: "Ходите по очереди, побеждает тот, у кого больше пар" },
     { id: "time",  icon: "⏱️", name: "На время",          desc: "Найди все пары, пока не закончился таймер" },
     { id: "moves", icon: "🎯", name: "Ограниченные ходы", desc: "Уложись в лимит ходов" },
-    { id: "inf",   icon: "♾️", name: "Бесконечность",     desc: "Один бесконечный уровень: проходи этапы и копи звёзды для магазина" }
+    { id: "inf",   icon: "♾️", name: "Бесконечность",     desc: "Один бесконечный уровень: проходи этапы и копи звёзды для магазина" },
+    { id: "triple", icon: "3️⃣", name: "Тройная проблема",  desc: "Находи по три одинаковые карточки. Свои уровни" }
   ];
   var BOT_LEVELS = {
     easy: { name: "Лёгкий",  acc: 0.35, slip: 0.25 },
@@ -746,11 +758,12 @@
     { id: "inf5",      icon: "♾️", name: "Бесконечный путь",   desc: "Пройди 5 этапов за один забег в режиме Бесконечность" },
     { id: "inf10",     icon: "🚀", name: "Без предела",        desc: "Пройди 10 этапов за один забег" },
     { id: "buyer",     icon: "🛒", name: "Покупатель",         desc: "Купи что-нибудь в магазине" },
-    { id: "weekly",    icon: "🎯", name: "Охотник за заданиями", desc: "Выполни все задания недели" }
+    { id: "weekly",    icon: "🎯", name: "Охотник за заданиями", desc: "Выполни все задания недели" },
+    { id: "triple",    icon: "3️⃣", name: "Тройной удар",       desc: "Пройди уровень в режиме Тройная проблема" }
   ];
   var TUT = [
     { icon: "🃏", title: "Найди пары", text: "Переворачивай по две карточки. Одинаковые остаются открытыми, разные закрываются. Открой все пары, чтобы победить." },
-    { icon: "🎮", title: "Режимы", text: "Классика, игра с ботом, вдвоём, на время и с ограничением ходов. Выбирай их в меню «Режимы»." },
+    { icon: "🎮", title: "Режимы", text: "Классика, игра с ботом, вдвоём, на время, с ограничением ходов, а ещё Бесконечность и Тройная проблема (три одинаковые карточки). Выбирай их в меню «Режимы»." },
     { icon: "💡", title: "Подсказки и серии", text: "Подсказка на секунду открывает половину закрытых карточек. Найди 3 пары подряд и получишь ещё одну." },
     { icon: "⭐", title: "Звёзды и награды", text: "Чем меньше ходов, тем больше звёзд. Звёзды открывают уровни, а на счёте ими платят в магазине за режимы, темы и рубашки. Больше всего звёзд даёт режим ♾️. Каждую неделю появляются новые задания за звёзды." },
     { icon: "🍎", title: "На экран «Домой»: iPhone", text: "1. Открой игру в Safari.\n2. Нажми «Поделиться» (квадрат со стрелкой вверх).\n3. Прокрути меню и выбери «На экран “Домой”».\n4. Нажми «Добавить».\n\nИгра появится на экране с иконкой, как приложение." },
@@ -857,6 +870,7 @@
       unlocked: { themes: ["animals"], modes: ["solo", "duo"], backs: ["classic"], tracks: [], palettes: ["mint"] },
       bank: 0, spent: 0, extraHints: 0, freezes: 0, pairShield: false,
       weekly: { week: "", bonus: false, items: [] },
+      triple: { unlocked: 1, stars: [], best: [] },
       musicOn: true, track: "", palette: "mint",
       tutorial: false, back: "classic", botLevel: "mid"
     };
@@ -889,7 +903,7 @@
 
   /* ================= Состояние игры ================= */
   var pm = "solo", curLv = LEVELS[0], cur = 0, isDaily = false, gameTheme = "animals", startTurn = 0;
-  var first = null, lock = false, over = false, gid = 0;
+  var first = null, lock = false, over = false, gid = 0, tsel = [];
   var moves = 0, found = 0, seconds = 0, timer = null;
   var hints = HINTS_PER_LEVEL, hintsUsed = 0, turn = 0, scores = [0, 0];
   var streak = 0, misses = 0, mem = {}, shieldUsed = false;
@@ -1319,8 +1333,23 @@
       it.addEventListener("click", startInfRun);
       box.appendChild(it);
     }
+    if (mode === "triple") {
+      var tp = meta.triple;
+      TRIPLE_LEVELS.forEach(function (lv, i) {
+        var tb = document.createElement("button");
+        tb.className = "lvl";
+        var tlocked = i >= tp.unlocked;
+        tb.disabled = tlocked;
+        tb.innerHTML = '<span class="num">' + (tlocked ? "🔒" : i + 1) + "</span>" +
+          '<span class="info">' + lv.groups + " " + pl3(lv.groups, ["тройка", "тройки", "троек"]) + modIcons(lv) + "</span>" +
+          '<span class="stars">' + (tlocked ? "" : starsHtml(tp.stars[i] || 0, 3)) + "</span>";
+        if (!tlocked) tb.addEventListener("click", function () { begin(lv, i, false, false); });
+        tb.setAttribute("aria-label", "Уровень " + (i + 1) + (tlocked ? ", закрыт" : ""));
+        box.appendChild(tb);
+      });
+    }
     LEVELS.forEach(function (lv, i) {
-      if (mode === "inf") return;
+      if (mode === "inf" || mode === "triple") return;
       var b = document.createElement("button");
       b.className = "lvl";
       var locked = !free && i >= progress.unlocked;
@@ -1502,7 +1531,7 @@
     gameTheme = daily ? dailyThemeKey() : theme;
     if (!keepStart) startTurn = 0;
     stopTimer();
-    first = null; lock = false; over = false;
+    first = null; lock = false; over = false; tsel = [];
     moves = 0; found = 0; seconds = 0; misses = 0; streak = 0; hintsUsed = 0; mem = {}; shieldUsed = false;
     hints = HINTS_PER_LEVEL + (meta.extraHints || 0); scores = [0, 0];
     var two = twoPlayers();
@@ -1520,10 +1549,10 @@
       $("gameTitle").textContent = "Уровень " + (idx + 1);
       $("gameMode").textContent = modeInfo().icon + " " + modeInfo().name +
         (pm === "bot" ? ", " + BOT_LEVELS[meta.botLevel].name.toLowerCase() : "") + modIcons(lv);
-      bestEl.textContent = progress.best[idx] || "—";
+      bestEl.textContent = levelProg().best[idx] || "—";
     }
     $("lblTime").textContent = pm === "time" ? "осталось, с" : pm === "inf" ? "этап" : "секунд";
-    $("lblMoves").textContent = pm === "inf" ? "жизней" : "ходов";
+    $("lblMoves").textContent = pm === "inf" ? "жизней" : pm === "triple" ? "попыток" : "ходов";
     $("lblBest").textContent = pm === "inf" ? "звёзд за забег" : "рекорд";
     $("stats").classList.toggle("hidden", two);
     $("players").classList.toggle("hidden", !two);
@@ -1538,7 +1567,9 @@
     grid.innerHTML = "";
     grid.style.gridTemplateColumns = "repeat(" + lv.cols + ", 1fr)";
     var set = shuffle(THEMES[gameTheme].items.slice(), rnd).slice(0, lv.pairs);
-    shuffle(set.concat(set), rnd).forEach(function (e, i) {
+    var deck = [];
+    for (var rep = 0; rep < (lv.size || 2); rep++) deck = deck.concat(set);
+    shuffle(deck, rnd).forEach(function (e, i) {
       var c = document.createElement("button");
       c.className = "card";
       c.dataset.v = e;
@@ -1558,6 +1589,58 @@
     if (pm === "bot" && turn === 1) scheduleBot();
   }
 
+  // Уровни и прогресс зависят от режима
+  function levelList() { return pm === "triple" ? TRIPLE_LEVELS : LEVELS; }
+  function levelProg() { return pm === "triple" ? meta.triple : progress; }
+
+  /* ---------- Тройная проблема ---------- */
+  function tripleFlip(c) {
+    tsel.push(c);
+    var last = tsel[tsel.length - 1];
+    if (last.dataset.v !== tsel[0].dataset.v) { tripleFail(); return; }
+    if (tsel.length < 3) return;                       // ждём следующую карточку
+
+    // собрана тройка
+    var set = tsel, g = gid;
+    tsel = [];
+    moves++; renderHud();
+    set.forEach(function (x) { x.classList.replace("open", "done"); });
+    found++;
+    sfx.match();
+    qEvent("pair");
+    qEvent("triple");
+    streak++;
+    if (streak > meta.stats.bestStreak) meta.stats.bestStreak = streak;
+    qEvent("streak", streak);
+    if (streak >= 5) unlock("streak5");
+    if (streak % 3 === 0 && hints < HINT_CAP) {
+      hints++;
+      updateHintBtn();
+      showToast("🔥 Серия из " + streak + "! +1 подсказка 💡");
+    }
+    if (found === curLv.pairs) {
+      stopTimer(); lock = true;
+      setTimeout(function () { if (g === gid) win(); }, 900);
+    }
+  }
+  function tripleFail() {
+    var set = tsel, g = gid;
+    tsel = [];
+    moves++; renderHud();
+    lock = true;
+    sfx.miss();
+    misses++;
+    if (meta.pairShield && !shieldUsed && streak >= 2) { shieldUsed = true; showToast("🧊 Заморозка сохранила серию!"); }
+    else streak = 0;
+    setTimeout(function () {
+      if (g !== gid) return;
+      set.forEach(function (x) { x.classList.remove("open"); x.setAttribute("aria-label", "Закрытая карточка"); });
+      if (over) return;
+      if (curLv.shuffle && misses % curLv.shuffle === 0) shuffleClosed();
+      lock = false;
+    }, curLv.fast ? 450 : 750);
+  }
+
   function flip(c) {
     if (lock || over || c.classList.contains("open") || c.classList.contains("done")) return;
     startTimer();
@@ -1565,6 +1648,7 @@
     c.classList.add("open");
     c.setAttribute("aria-label", "Карточка " + c.dataset.v);
     observe(c);
+    if (pm === "triple") { tripleFlip(c); return; }
     if (!first) { first = c; return; }
 
     moves++;
@@ -1733,8 +1817,10 @@
       stars = moves <= Math.ceil(lm * 0.6) ? 3 : moves <= Math.ceil(lm * 0.85) ? 2 : 1;
       msg = "Ходов: " + moves + " из " + lm + ".";
     } else {
-      stars = moves <= Math.ceil(pairs * 1.6) ? 3 : moves <= Math.ceil(pairs * 2.5) ? 2 : 1;
-      msg = "Ходов: " + moves + ", время: " + seconds + " с.";
+      stars = pm === "triple"
+        ? (moves <= Math.ceil(pairs * 2.2) ? 3 : moves <= Math.ceil(pairs * 3.5) ? 2 : 1)
+        : (moves <= Math.ceil(pairs * 1.6) ? 3 : moves <= Math.ceil(pairs * 2.5) ? 2 : 1);
+      msg = (pm === "triple" ? "Попыток: " : "Ходов: ") + moves + ", время: " + seconds + " с.";
     }
 
     var hasNext = false;
@@ -1759,16 +1845,17 @@
       if (d.streak >= 3) unlock("daily3");
       bestEl.textContent = d.best;
     } else {
-      if (!progress.best[cur] || moves < progress.best[cur]) {
-        if (progress.best[cur]) msg += " Новый рекорд!";
-        progress.best[cur] = moves;
+      var P = levelProg();
+      if (!P.best[cur] || moves < P.best[cur]) {
+        if (P.best[cur]) msg += " Новый рекорд!";
+        P.best[cur] = moves;
       }
-      if (!progress.stars[cur] || stars > progress.stars[cur]) progress.stars[cur] = stars;
-      hasNext = cur + 1 < LEVELS.length;
-      if (hasNext && progress.unlocked < cur + 2) progress.unlocked = cur + 2;
-      save();
+      if (!P.stars[cur] || stars > P.stars[cur]) P.stars[cur] = stars;
+      hasNext = cur + 1 < levelList().length;
+      if (hasNext && P.unlocked < cur + 2) P.unlocked = cur + 2;
+      if (pm === "triple") saveMeta(); else save();
       checkUnlocks(false);
-      bestEl.textContent = progress.best[cur];
+      bestEl.textContent = P.best[cur];
     }
 
     meta.stats.themeWins[gameTheme] = 1;
@@ -1778,6 +1865,7 @@
     if (pm === "time") qEvent("time");
     if (isDaily) qEvent("daily");
     unlock("first");
+    if (pm === "triple") unlock("triple");
     if (moves === pairs) unlock("flawless");
     if (pm === "time") unlock("time");
     if (pm === "moves") unlock("moves");
@@ -1909,7 +1997,7 @@
   function restartCurrent() {
     if (pm === "inf") startInfRun();
     else if (isDaily) begin(DAILY_LEVEL, 0, true, false);
-    else begin(LEVELS[cur], cur, false, false);
+    else begin(levelList()[cur], cur, false, false);
   }
 
   $("back").addEventListener("click", toMenu);
@@ -1917,7 +2005,7 @@
   $("restart").addEventListener("click", restartCurrent);
   $("next").addEventListener("click", function () {
     if (pm === "inf") { infStage++; beginInf(); }
-    else begin(LEVELS[cur + 1], cur + 1, false, false);
+    else begin(levelList()[cur + 1], cur + 1, false, false);
   });
   $("again").addEventListener("click", function () {
     if (!isDaily && twoPlayers()) { startTurn = 1 - startTurn; begin(curLv, cur, false, true); }
@@ -1956,6 +2044,7 @@
 
   twoTap($("reset"), "Нажми ещё раз, чтобы сбросить", function () {
     meta.bank = (meta.bank || 0) + totalStars();   // звёзды остаются на счёте
+    meta.triple = { unlocked: 1, stars: [], best: [] };
     saveMeta();
     Object.keys(THEMES).forEach(function (k) { allProgress[k] = blank(); });
     progress = allProgress[theme];
@@ -1974,7 +2063,7 @@
 
   /* ---------- Звёзды открывают темы и режимы ---------- */
   var THEME_COST = { animals: 0, space: 4, cars: 8, food: 12, sports: 16, faces: 20, flags: 25 };
-  var MODE_COST  = { solo: 0, duo: 0, bot: 6, time: 10, moves: 14, inf: 20 };
+  var MODE_COST  = { solo: 0, duo: 0, bot: 6, time: 10, moves: 14, inf: 20, triple: 10 };
   var BACK_COST  = { classic: 0, sunset: 6, ocean: 10, mint: 14, night: 18 };
   var MUSIC_COST = { fun: 5, chill: 8, space: 11, retro: 14 };
   var PALETTE_COST = { mint: 0, sunset: 6, ocean: 8, forest: 10, rose: 12, grape: 14 };
@@ -1985,6 +2074,7 @@
     Object.keys(allProgress).forEach(function (k) {
       allProgress[k].stars.forEach(function (n) { s += n || 0; });
     });
+    ((meta.triple && meta.triple.stars) || []).forEach(function (n) { s += n || 0; });
     return s;
   }
   function isThemeOpen(k) { return meta.unlocked.themes.indexOf(k) >= 0; }
@@ -2199,6 +2289,7 @@
         if (t && t.stars) t.stars.forEach(function (n) { stars += n || 0; });
       });
       stars += m.bank || 0;
+      ((m.triple && m.triple.stars) || []).forEach(function (n) { stars += n || 0; });
       rows.push({ name: name, stars: stars, inf: (m.stats && m.stats.infBest) || 0, me: id === myId });
     }
     add("Гость", "", "");
@@ -2272,6 +2363,8 @@
       text: function (n) { return "Выиграй " + n + " " + pl3(n, ["раз", "раза", "раз"]) + " в режиме на время"; } },
     { id: "bot", icon: "🤖", need: "bot", tiers: [[1, 4], [2, 6], [3, 9]],
       text: function (n) { return "Обыграй бота " + n + " " + pl3(n, ["раз", "раза", "раз"]); } },
+    { id: "triple", icon: "3️⃣", need: "triple", tiers: [[4, 3], [8, 5], [14, 8]],
+      text: function (n) { return "Собери " + n + " " + pl3(n, ["тройку", "тройки", "троек"]) + " в режиме Тройная проблема"; } },
     { id: "games", icon: "🎮", need: null, tiers: [[6, 3], [12, 5], [20, 8]],
       text: function (n) { return "Сыграй " + n + " " + pl3(n, ["партию", "партии", "партий"]); } }
   ];
@@ -2673,6 +2766,7 @@
       });
       var m = JSON.parse((d && d[META_KEY]) || "{}") || {};
       out.stars += m.bank || 0;
+      ((m.triple && m.triple.stars) || []).forEach(function (n) { out.stars += n || 0; });
       out.inf = (m.stats && m.stats.infBest) || 0;
     } catch (e) {}
     return out;
