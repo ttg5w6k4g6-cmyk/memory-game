@@ -337,6 +337,10 @@
   .city-stats div { flex: 1; background: var(--bg); border-radius: 14px; padding: 8px 6px; text-align: center; font-size: .78rem; color: var(--muted); }
   .city-stats b { display: block; font-size: 1.05rem; color: var(--ink); }
 
+  .hp { transform-box: fill-box; transform-origin: 50% 100%; }
+  .hp.hit { animation: hhit .3s; }
+  @keyframes hhit { 40% { transform: scaleY(.78) translateY(2px); } 70% { transform: scaleY(1.18); } }
+
   /* Недельные задания */
   .quest-btn {
     display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
@@ -782,7 +786,7 @@
     { id: "duo",   icon: "👥", name: "На двоих",          desc: "Ходите по очереди, побеждает тот, у кого больше пар" },
     { id: "time",  icon: "⏱️", name: "На время",          desc: "Найди все пары, пока не закончился таймер" },
     { id: "moves", icon: "🎯", name: "Ограниченные ходы", desc: "Уложись в лимит ходов" },
-    { id: "inf",   icon: "♾️", name: "Бесконечность",     desc: "Один бесконечный уровень: проходи этапы и копи звёзды для магазина" },
+    { id: "inf",   icon: "♾️", name: "Бесконечность",     desc: "Один бесконечный уровень: за каждую найденную пару +1 жизнь, ошибка забирает одну. Проходи этапы и копи звёзды" },
     { id: "triple", icon: "3️⃣", name: "Тройная проблема",  desc: "Находи по три одинаковые карточки. Свои уровни" }
   ];
   var BOT_LEVELS = {
@@ -818,7 +822,8 @@
     { id: "triple",    icon: "3️⃣", name: "Тройной удар",       desc: "Пройди уровень в режиме Тройная проблема" },
     { id: "city4",     icon: "🏙️", name: "Градостроитель",     desc: "Улучши город до 4 уровня" },
     { id: "city8",     icon: "🌌", name: "Космополис",         desc: "Улучши город до максимального уровня" },
-    { id: "tap1000",   icon: "👆", name: "Тысяча кликов",      desc: "Сделай 1000 кликов в городе" }
+    { id: "tap1000",   icon: "👆", name: "Тысяча кликов",      desc: "Сделай 1000 кликов в городе" },
+    { id: "crew",      icon: "🧑‍🔧", name: "Бригада",            desc: "Найми всех трёх помощников в городе" }
   ];
   var TUT = [
     { icon: "🃏", title: "Найди пары", text: "Переворачивай по две карточки. Одинаковые остаются открытыми, разные закрываются. Открой все пары, чтобы победить." },
@@ -930,7 +935,7 @@
       bank: 0, spent: 0, extraHints: 0, freezes: 0, pairShield: false,
       weekly: { week: "", bonus: false, items: [] },
       triple: { unlocked: 1, stars: [], best: [] },
-      city: { taps: 0, prog: 0, power: 0, level: 1, earned: 0, last: 0 },
+      city: { taps: 0, prog: 0, power: 0, level: 1, earned: 0, last: 0, helpers: 0 },
       musicOn: true, track: "", palette: "mint",
       tutorial: false, back: "classic", botLevel: "mid"
     };
@@ -1578,7 +1583,7 @@
   /* ---------- Бесконечный режим ---------- */
   var INF_SEQ = [3, 4, 5, 6, 8, 9, 10, 12, 15, 18, 21];
   var INF_COLS = { 3: 3, 4: 4, 5: 5, 6: 4, 8: 4, 9: 6, 10: 5, 12: 6, 15: 6, 18: 6, 21: 6 };
-  var INF_MAX = 5;
+  var INF_START = 5, INF_MAX = 10;     // стартовые жизни и потолок
   var infStage = 1, infHearts = INF_MAX, infRunStars = 0, infCleared = 0;
   function infLevel(stage) {
     var pairs = INF_SEQ[Math.min(stage, INF_SEQ.length) - 1];
@@ -1588,7 +1593,7 @@
     return lv;
   }
   function beginInf() { begin(infLevel(infStage), infStage - 1, false, false); }
-  function startInfRun() { infStage = 1; infHearts = INF_MAX; infRunStars = 0; infCleared = 0; beginInf(); }
+  function startInfRun() { infStage = 1; infHearts = INF_START; infRunStars = 0; infCleared = 0; beginInf(); }
 
   function begin(lv, idx, daily, keepStart) {
     gid++;
@@ -1652,6 +1657,7 @@
 
     if (lv.shuffle) showToast("🔀 Каждая " + lv.shuffle + "-я ошибка перемешивает карточки");
     if (lv.fast) showToast("⚡ Карточки закрываются быстрее");
+    if (pm === "inf" && infStage === 1) showToast("❤️ За каждую найденную пару +1 жизнь");
     if (pm === "bot" && turn === 1) scheduleBot();
   }
 
@@ -1729,6 +1735,7 @@
       found++;
       sfx.match();
       qEvent("pair");
+      if (pm === "inf") { infHearts = Math.min(INF_MAX, infHearts + 1); renderHud(); }   // +1 жизнь за пару
       delete mem[a.dataset.i]; delete mem[b.dataset.i];
       if (twoPlayers()) {
         a.classList.add("p" + turn); b.classList.add("p" + turn);
@@ -2222,7 +2229,6 @@
     infCleared++;
     qEvent("inf");
     if (infCleared > (meta.stats.infBest || 0)) meta.stats.infBest = infCleared;
-    infHearts = Math.min(INF_MAX, infHearts + 1);
     saveMeta();
     if (infCleared >= 5) unlock("inf5");
     if (infCleared >= 10) unlock("inf10");
@@ -2503,6 +2509,8 @@
   $("openQuests").addEventListener("click", function () { renderQuests(); openSheet("questSheet"); });
 
   /* ================= Мой город (кликер) ================= */
+  var HELPER_COSTS = [25, 50, 90];                      // три помощника
+  var HELPER_MS = 5000, HELPER_SEC = 5;                 // каждый кликает раз в 5 секунд, пока игра открыта
   var CITY_CAP_H = 8;                                   // сколько часов копится офлайн-доход
   var POWER_COSTS = [5, 10, 18, 30, 50, 80, 120];       // улучшения силы клика: 10 → 9 → ... → 3 клика на звезду
   var CITY_LEVELS = [
@@ -2519,11 +2527,12 @@
   function cityRate() { return CITY_LEVELS[meta.city.level - 1].rate; }
   function cityInfoText() {
     var c = meta.city, L = CITY_LEVELS[c.level - 1];
-    return "Уровень " + c.level + " «" + L.name + "»" + (L.rate ? ", офлайн +" + L.rate + " ★/час" : ", офлайн откроется на 2 уровне");
+    return "Уровень " + c.level + " «" + L.name + "»" + (L.rate ? ", офлайн +" + L.rate + " ★/час" : ", офлайн откроется на 2 уровне") +
+      (c.helpers ? ", помощников: " + c.helpers : "");
   }
 
   // Рисунок города: чем выше уровень, тем больше и необычнее
-  function citySvg(level) {
+  function citySvg(level, helpers) {
     var L = CITY_LEVELS[level - 1], cx = 180, cy = 410, R = 215, rnd = rng(1000 + level * 77), i;
     var s = '<svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Город на планете">';
     s += '<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#070b24"/><stop offset="1" stop-color="' + L.skyEnd + '"/></linearGradient>' +
@@ -2572,6 +2581,14 @@
       var rx = 50 + i * 110 + rnd() * 30, ry = 35 + rnd() * 50;
       s += '<g transform="rotate(25 ' + rx.toFixed(0) + " " + ry.toFixed(0) + ')"><path d="M' + rx.toFixed(0) + " " + ry.toFixed(0) + " l3 9 h-6 z" + '" fill="#fff"/><path d="M' + rx.toFixed(0) + " " + (ry + 9).toFixed(0) + ' l2 7 h-4 z" fill="#ff9f43"/></g>';
     }
+    var HC = ["#ffd166", "#ff7a7a", "#6be3ff"], HA = [-22, 0, 22];
+    for (i = 0; i < (helpers || 0); i++) {
+      var fy = cy - R + 11;
+      s += rot(HA[i], '<g transform="translate(' + cx + " " + fy + ') scale(1.7) translate(' + (-cx) + " " + (-fy) + ')"><g class="hp" data-i="' + i + '"><rect x="' + (cx - 2.6) + '" y="' + (fy - 11) + '" width="5.2" height="9" rx="1.6" fill="' + HC[i] + '"/>' +
+        '<circle cx="' + cx + '" cy="' + (fy - 14) + '" r="3.4" fill="#ffe0bd"/>' +
+        '<rect x="' + (cx - 1.6) + '" y="' + (fy - 2) + '" width="1.3" height="4" fill="#2a2f45"/><rect x="' + (cx + 0.3) + '" y="' + (fy - 2) + '" width="1.3" height="4" fill="#2a2f45"/>' +
+        '<rect x="' + (cx + 2.4) + '" y="' + (fy - 9) + '" width="3.6" height="1.4" rx=".7" fill="' + HC[i] + '"/></g></g>');
+    }
     return s + "</svg>";
   }
 
@@ -2598,7 +2615,8 @@
   function renderCity() {
     var c = meta.city, L = CITY_LEVELS[c.level - 1], n = cityN();
     $("cityBal").textContent = "★ " + balance();
-    if (cityShownLevel !== c.level) { $("citySvg").innerHTML = citySvg(c.level); cityShownLevel = c.level; }
+    var drawKey = c.level + ":" + (c.helpers || 0);
+    if (cityShownLevel !== drawKey) { $("citySvg").innerHTML = citySvg(c.level, c.helpers || 0); cityShownLevel = drawKey; }
     $("cityBar").style.width = Math.round(100 * c.prog / n) + "%";
     $("cityProgText").textContent = "Клики до звезды: " + c.prog + " из " + n;
     $("cityStats").innerHTML =
@@ -2610,6 +2628,10 @@
     cards += '<div class="shop-item"><span class="si">👆</span><div class="st"><b>Сила клика</b><span>' +
       (pw < maxP ? "Сейчас " + n + " " + pl3(n, ["клик", "клика", "кликов"]) + " = 1 ★. После улучшения: " + (n - 1) : "Максимум: 3 клика = 1 ★") +
       '</span></div>' + (pw < maxP ? '<button class="buy' + (POWER_COSTS[pw] > balance() ? " cant" : "") + '" data-buy="power">★ ' + POWER_COSTS[pw] + "</button>" : '<button class="buy done" disabled>✓</button>') + "</div>";
+    var hp = c.helpers || 0;
+    cards += '<div class="shop-item"><span class="si">🧑‍🔧</span><div class="st"><b>Помощники (' + hp + " из " + HELPER_COSTS.length + ")</b><span>Человечки сами кликают раз в " +
+      HELPER_SEC + " секунд, пока игра открыта</span></div>" +
+      (hp < HELPER_COSTS.length ? '<button class="buy' + (HELPER_COSTS[hp] > balance() ? " cant" : "") + '" data-buy="helper">★ ' + HELPER_COSTS[hp] + "</button>" : '<button class="buy done" disabled>✓</button>') + "</div>";
     if (c.level < CITY_LEVELS.length) {
       var nx = CITY_LEVELS[c.level];
       cards += '<div class="shop-item"><span class="si">🏙️</span><div class="st"><b>Улучшить город: «' + nx.name + '»</b><span>Офлайн-доход ' + nx.rate +
@@ -2623,57 +2645,89 @@
   }
 
   function cityBuy(kind) {
-    var c = meta.city, price = kind === "power" ? POWER_COSTS[c.power || 0] : CITY_LEVELS[c.level].cost;
+    var c = meta.city, price = kind === "power" ? POWER_COSTS[c.power || 0] : kind === "helper" ? HELPER_COSTS[c.helpers || 0] : CITY_LEVELS[c.level].cost;
     if (price > balance()) { showToast("Не хватает " + (price - balance()) + " ★. Кликай по планете!"); return; }
     cityCollect(false);                       // сначала зачтём накопленное
     meta.spent = (meta.spent || 0) + price;
     if (kind === "power") c.power = (c.power || 0) + 1;
+    else if (kind === "helper") { c.helpers = (c.helpers || 0) + 1; helperClock = [0, 0, 0]; if (c.helpers >= 3) unlock("crew"); }
     else { c.level++; c.last = Date.now(); }
     saveMeta();
     sfx.award();
-    showToast(kind === "power" ? "👆 Теперь " + cityN() + " " + pl3(cityN(), ["клик", "клика", "кликов"]) + " = 1 ★" : "🏙️ Новый уровень города: «" + CITY_LEVELS[c.level - 1].name + "»");
+    showToast(kind === "power" ? "👆 Теперь " + cityN() + " " + pl3(cityN(), ["клик", "клика", "кликов"]) + " = 1 ★"
+      : kind === "helper" ? "🧑‍🔧 Помощник вышел на работу (" + c.helpers + " из 3)"
+      : "🏙️ Новый уровень города: «" + CITY_LEVELS[c.level - 1].name + "»");
     if (c.level >= 4) unlock("city4");
     if (c.level >= CITY_LEVELS.length) unlock("city8");
     renderCity();
     renderMenu();
   }
 
-  function cityTap(e) {
-    var now = Date.now();
-    if (now - cityLastTap < 70) return;       // защита от автокликеров
-    cityLastTap = now;
+  // Один клик: от игрока (helperIndex = -1) или от помощника
+  function cityClick(x, y, helperIndex) {
     var c = meta.city, n = cityN(), star = false;
     c.taps++; c.prog++;
     if (c.prog >= n) { c.prog = 0; c.earned++; star = true; }
     if (c.taps === 1000) unlock("tap1000");
-    var scene = $("cityScene"), r = scene.getBoundingClientRect();
-    var fx = document.createElement("span");
-    fx.className = "fx" + (star ? " star" : "");
-    fx.textContent = star ? "+1 ★" : "+" + c.prog + "/" + n;
-    fx.style.left = Math.max(20, Math.min(r.width - 20, e.clientX - r.left)) + "px";
-    fx.style.top = Math.max(20, Math.min(r.height - 10, e.clientY - r.top)) + "px";
-    $("cityFx").appendChild(fx);
-    setTimeout(function () { if (fx.parentNode) fx.parentNode.removeChild(fx); }, 850);
-    scene.classList.remove("tap"); void scene.offsetWidth; scene.classList.add("tap");
-    if (star) sfx.coin(); else sfx.tap();
-    $("cityBar").style.width = Math.round(100 * c.prog / n) + "%";
-    $("cityProgText").textContent = "Клики до звезды: " + c.prog + " из " + n;
-    if (star) {
-      $("cityBal").textContent = "★ " + balance();
-      $("shopBal").textContent = "★ " + balance();
-      $("cityStats").firstChild.firstChild.textContent = c.taps;
-    } else {
-      $("cityStats").firstChild.firstChild.textContent = c.taps;
-    }
     citySaveSoon();
+    var open = $("citySheet").classList.contains("show");
+    if (open) {
+      var scene = $("cityScene"), r = scene.getBoundingClientRect();
+      var fx = document.createElement("span");
+      fx.className = "fx" + (star ? " star" : "");
+      fx.textContent = star ? "+1 ★" : "+" + c.prog + "/" + n;
+      fx.style.left = Math.max(20, Math.min(r.width - 20, x - r.left)) + "px";
+      fx.style.top = Math.max(20, Math.min(r.height - 10, y - r.top)) + "px";
+      $("cityFx").appendChild(fx);
+      setTimeout(function () { if (fx.parentNode) fx.parentNode.removeChild(fx); }, 850);
+      if (helperIndex < 0) { scene.classList.remove("tap"); void scene.offsetWidth; scene.classList.add("tap"); }
+      else {
+        var hp = document.querySelector('#citySvg .hp[data-i="' + helperIndex + '"]');
+        if (hp) { hp.classList.remove("hit"); void hp.getBoundingClientRect(); hp.classList.add("hit"); }
+      }
+      $("cityBar").style.width = Math.round(100 * c.prog / n) + "%";
+      $("cityProgText").textContent = "Клики до звезды: " + c.prog + " из " + n;
+      $("cityStats").children[0].firstChild.textContent = c.taps;
+    }
+    if (helperIndex < 0) { if (star) sfx.coin(); else sfx.tap(); }
+    else if (star && open) sfx.coin();
     if (star) {
-      qsa("#cityCards .buy[data-buy]").forEach(function (b) {
-        var price = b.dataset.buy === "power" ? POWER_COSTS[c.power || 0] : (CITY_LEVELS[c.level] || {}).cost;
-        b.classList.toggle("cant", price > balance());
-      });
-      $("cityStats").children[1].firstChild.textContent = c.earned + " ★";
+      $("shopBal").textContent = "★ " + balance();
+      if ($("menu").classList.contains("active")) $("total").innerHTML = '<span class="s">★</span> ' + balance() + " на счёте, всего заработано " + lifetime();
+      if (open) {
+        $("cityBal").textContent = "★ " + balance();
+        $("cityStats").children[1].firstChild.textContent = c.earned + " ★";
+        qsa("#cityCards .buy[data-buy]").forEach(function (bt) {
+          var k = bt.dataset.buy;
+          var price = k === "power" ? POWER_COSTS[c.power || 0] : k === "helper" ? HELPER_COSTS[c.helpers || 0] : (CITY_LEVELS[c.level] || {}).cost;
+          bt.classList.toggle("cant", price > balance());
+        });
+      }
     }
   }
+  function cityTap(e) {
+    var now = Date.now();
+    if (now - cityLastTap < 70) return;       // защита от автокликеров
+    cityLastTap = now;
+    cityClick(e.clientX, e.clientY, -1);
+  }
+
+  // Помощники кликают сами, пока игра открыта
+  var helperClock = [0, 0, 0];
+  function helperTick() {
+    var n = (meta && meta.city && meta.city.helpers) || 0;
+    if (!n || document.hidden) return;
+    var now = Date.now();
+    for (var i = 0; i < n; i++) {
+      if (!helperClock[i]) helperClock[i] = now + i * 1700;       // начинают не одновременно
+      if (now - helperClock[i] >= HELPER_MS) {
+        helperClock[i] = now;
+        var el = document.querySelector('#citySvg .hp[data-i="' + i + '"]'), bb = el ? el.getBoundingClientRect() : null;
+        cityClick(bb ? bb.left + bb.width / 2 : 0, bb ? bb.top : 0, i);
+      }
+    }
+  }
+  setInterval(helperTick, 300);
   $("cityScene").addEventListener("pointerdown", cityTap);
   $("openCity").addEventListener("click", function () { cityCollect(true); renderCity(); openSheet("citySheet"); });
   document.addEventListener("visibilitychange", function () {
