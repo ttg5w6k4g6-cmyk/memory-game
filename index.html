@@ -307,6 +307,26 @@
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30; display: none; }
 
+  /* Отгадай, что загадал */
+  #gCover { background: var(--bg); }
+  .g-banner { margin: 0 0 10px; padding: 10px 12px; border-radius: 14px; background: var(--card-face); font-weight: 600; text-align: center; font-size: .95rem; }
+  .g-board { display: grid; gap: 8px; margin-bottom: 12px; }
+  .g-card {
+    position: relative; border: 3px solid transparent; border-radius: 16px; background: var(--card-face);
+    padding: 8px 2px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .g-card .ge { font-size: 1.9rem; line-height: 1.2; }
+  .g-card .gn { font-size: .68rem; color: var(--muted); text-align: center; line-height: 1.1; padding: 0 2px; }
+  .g-card.sel { border-color: var(--accent); background: var(--match); }
+  .g-card.out { opacity: .22; }
+  .g-card.out::after { content: "✕"; position: absolute; top: 8px; font-size: 1.6rem; color: var(--accent); }
+  .g-answer { text-align: center; font-size: 1.3rem; font-weight: 700; min-height: 1.6em; margin-bottom: 4px; }
+  .g-sec { font-weight: 700; margin: 14px 0 6px; }
+  .g-qs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .g-q { border: 0; border-radius: 14px; padding: 10px 8px; background: var(--card-face); font-weight: 600; font-size: .85rem; cursor: pointer; line-height: 1.2; }
+  .g-q:disabled { opacity: .35; cursor: default; }
+  .g-line { background: var(--card-face); border-radius: 12px; padding: 8px 12px; margin-bottom: 6px; font-size: .9rem; }
+
   /* Город-кликер */
   .city-btn {
     display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
@@ -491,6 +511,36 @@
   </div>
   <div class="board"><div class="grid" id="grid" role="group" aria-label="Игровое поле"></div></div>
 </section>
+
+<!-- Отгадай, что загадал -->
+<section class="screen" id="guess">
+  <div class="top">
+    <button class="icon-btn" id="gBack" aria-label="В меню">←</button>
+    <div class="ttl"><h2 id="gTitle">Отгадай, что загадал</h2><small id="gSub"></small></div>
+    <button class="icon-btn" id="gRestart" aria-label="Начать заново">↻</button>
+  </div>
+  <div class="g-banner" id="gBanner"></div>
+  <div class="g-board" id="gBoard"></div>
+  <div id="gPickBar" class="hidden"><button class="btn" id="gPickBtn" disabled>Выбери персонажа</button></div>
+  <div id="gPlay" class="hidden">
+    <div class="g-answer" id="gAnswer"></div>
+    <button class="btn" id="gGuessBtn" disabled>Нажми на персонажа, чтобы угадать</button>
+    <button class="btn alt hidden" id="gPass">Передать ход</button>
+    <div class="g-sec">Задай вопрос</div>
+    <div class="g-qs" id="gQs"></div>
+    <div class="g-sec">Что ты узнал</div>
+    <div id="gHist"></div>
+  </div>
+</section>
+
+<div class="overlay" id="gCover" style="z-index: 15;">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="tut-icon">🤝</div>
+    <h3 id="gCoverTitle"></h3>
+    <p id="gCoverText"></p>
+    <button class="btn" id="gCoverBtn">Готов</button>
+  </div>
+</div>
 
 <!-- Окно результата -->
 <div class="overlay" id="overlay">
@@ -787,7 +837,8 @@
     { id: "time",  icon: "⏱️", name: "На время",          desc: "Найди все пары, пока не закончился таймер" },
     { id: "moves", icon: "🎯", name: "Ограниченные ходы", desc: "Уложись в лимит ходов" },
     { id: "inf",   icon: "♾️", name: "Бесконечность",     desc: "Один бесконечный уровень: за каждую найденную пару +1 жизнь, ошибка забирает одну. Проходи этапы и копи звёзды" },
-    { id: "triple", icon: "3️⃣", name: "Тройная проблема",  desc: "Находи по три одинаковые карточки. Свои уровни" }
+    { id: "triple", icon: "3️⃣", name: "Тройная проблема",  desc: "Находи по три одинаковые карточки. Свои уровни" },
+    { id: "guess",  icon: "🕵️", name: "Отгадай, что загадал", desc: "Угадай персонажа по вопросам: с ботом (5 уровней) или с другом по очереди" }
   ];
   var BOT_LEVELS = {
     easy: { name: "Лёгкий",  acc: 0.35, slip: 0.25 },
@@ -823,7 +874,11 @@
     { id: "city4",     icon: "🏙️", name: "Градостроитель",     desc: "Улучши город до 4 уровня" },
     { id: "city8",     icon: "🌌", name: "Космополис",         desc: "Улучши город до максимального уровня" },
     { id: "tap1000",   icon: "👆", name: "Тысяча кликов",      desc: "Сделай 1000 кликов в городе" },
-    { id: "crew",      icon: "🧑‍🔧", name: "Бригада",            desc: "Найми всех трёх помощников в городе" }
+    { id: "crew",      icon: "🧑‍🔧", name: "Бригада",            desc: "Найми всех трёх помощников в городе" },
+    { id: "moon1",     icon: "🌙", name: "Лунная колония",     desc: "Начни колонию на Луне" },
+    { id: "moon6",     icon: "🚀", name: "Лунополис",          desc: "Построй самый большой город на Луне" },
+    { id: "guess1",    icon: "🕵️", name: "Сыщик",              desc: "Угадай персонажа у бота" },
+    { id: "guess5",    icon: "🧐", name: "Мастер вопросов",    desc: "Получи 5 звёзд на уровне в режиме Отгадай" }
   ];
   var TUT = [
     { icon: "🃏", title: "Найди пары", text: "Переворачивай по две карточки. Одинаковые остаются открытыми, разные закрываются. Открой все пары, чтобы победить." },
@@ -932,10 +987,11 @@
       stats: { games: 0, wins: 0, losses: 0, matches: 0, seconds: 0, bestStreak: 0, botWins: 0, infBest: 0, themeGames: {}, themeWins: {} },
       daily: { best: null, date: "", streak: 0, last: "" },
       unlocked: { themes: ["animals"], modes: ["solo", "duo"], backs: ["classic"], tracks: [], palettes: ["mint"] },
-      bank: 0, spent: 0, extraHints: 0, freezes: 0, pairShield: false,
+      bank: 0, spent: 0, moons: 0, extraHints: 0, freezes: 0, pairShield: false,
       weekly: { week: "", bonus: false, items: [] },
       triple: { unlocked: 1, stars: [], best: [] },
-      city: { taps: 0, prog: 0, power: 0, level: 1, earned: 0, last: 0, helpers: 0 },
+      guess: { unlocked: 1, stars: [], best: [] },
+      city: { taps: 0, prog: 0, power: 0, level: 1, earned: 0, last: 0, helpers: 0, superW: false, moon: 0 },
       musicOn: true, track: "", palette: "mint",
       tutorial: false, back: "classic", botLevel: "mid"
     };
@@ -1356,7 +1412,7 @@
 
   /* ================= Экраны и панели ================= */
   function show(id) {
-    ["menu", "game"].forEach(function (s) { $(s).classList.toggle("active", s === id); });
+    ["menu", "game", "guess"].forEach(function (s) { $(s).classList.toggle("active", s === id); });
     if (id !== "game") document.body.classList.remove("turn2");
   }
   function openSheet(id) { $(id).classList.add("show"); }
@@ -1418,8 +1474,28 @@
         box.appendChild(tb);
       });
     }
+    if (mode === "guess") {
+      var gp = meta.guess;
+      var fb = document.createElement("button");
+      fb.className = "lvl inf-tile";
+      fb.innerHTML = '<span class="num">👥</span><span class="info">Против друга: загадываете по очереди</span><span class="stars">Один телефон на двоих</span>';
+      fb.addEventListener("click", function () { gStart("duo", 0); });
+      box.appendChild(fb);
+      GUESS_LEVELS.forEach(function (lv, i) {
+        var gb = document.createElement("button");
+        gb.className = "lvl";
+        var glocked = i >= gp.unlocked;
+        gb.disabled = glocked;
+        gb.innerHTML = '<span class="num">' + (glocked ? "🔒" : i + 1) + "</span>" +
+          '<span class="info">С ботом: ' + lv.n + " персонажей" + (lv.limit < 99 ? ", до " + lv.limit + " вопросов" : "") + "</span>" +
+          '<span class="stars">' + (glocked ? "" : starsHtml(gp.stars[i] || 0, 5)) + "</span>";
+        if (!glocked) gb.addEventListener("click", function () { gStart("bot", i); });
+        gb.setAttribute("aria-label", "Уровень " + (i + 1) + (glocked ? ", закрыт" : ""));
+        box.appendChild(gb);
+      });
+    }
     LEVELS.forEach(function (lv, i) {
-      if (mode === "inf" || mode === "triple") return;
+      if (mode === "inf" || mode === "triple" || mode === "guess") return;
       var b = document.createElement("button");
       b.className = "lvl";
       var locked = !free && i >= progress.unlocked;
@@ -2066,9 +2142,10 @@
   }
 
   /* ================= Кнопки ================= */
-  function toMenu() { leaveGame(); $("overlay").classList.remove("show"); renderMenu(); }
+  function toMenu() { leaveGame(); $("overlay").classList.remove("show"); $("gCover").classList.remove("show"); renderMenu(); }
   function restartCurrent() {
-    if (pm === "inf") startInfRun();
+    if (pm === "guess") gStart(GS.kind, GS.level);
+    else if (pm === "inf") startInfRun();
     else if (isDaily) begin(DAILY_LEVEL, 0, true, false);
     else begin(levelList()[cur], cur, false, false);
   }
@@ -2077,7 +2154,8 @@
   $("toMenu").addEventListener("click", toMenu);
   $("restart").addEventListener("click", restartCurrent);
   $("next").addEventListener("click", function () {
-    if (pm === "inf") { infStage++; beginInf(); }
+    if (pm === "guess") { gStart("bot", GS.level + 1); }
+    else if (pm === "inf") { infStage++; beginInf(); }
     else begin(levelList()[cur + 1], cur + 1, false, false);
   });
   $("again").addEventListener("click", function () {
@@ -2118,6 +2196,7 @@
   twoTap($("reset"), "Нажми ещё раз, чтобы сбросить", function () {
     meta.bank = (meta.bank || 0) + totalStars();   // звёзды остаются на счёте
     meta.triple = { unlocked: 1, stars: [], best: [] };
+    meta.guess = { unlocked: 1, stars: [], best: [] };
     saveMeta();
     Object.keys(THEMES).forEach(function (k) { allProgress[k] = blank(); });
     progress = allProgress[theme];
@@ -2136,7 +2215,7 @@
 
   /* ---------- Звёзды открывают темы и режимы ---------- */
   var THEME_COST = { animals: 0, space: 4, cars: 8, food: 12, sports: 16, faces: 20, flags: 25 };
-  var MODE_COST  = { solo: 0, duo: 0, bot: 6, time: 10, moves: 14, inf: 20, triple: 10 };
+  var MODE_COST  = { solo: 0, duo: 0, bot: 6, time: 10, moves: 14, inf: 20, triple: 10, guess: 50 };
   var BACK_COST  = { classic: 0, sunset: 6, ocean: 10, mint: 14, night: 18 };
   var MUSIC_COST = { fun: 5, chill: 8, space: 11, retro: 14 };
   var PALETTE_COST = { mint: 0, sunset: 6, ocean: 8, forest: 10, rose: 12, grape: 14 };
@@ -2148,6 +2227,7 @@
       allProgress[k].stars.forEach(function (n) { s += n || 0; });
     });
     ((meta.triple && meta.triple.stars) || []).forEach(function (n) { s += n || 0; });
+    ((meta.guess && meta.guess.stars) || []).forEach(function (n) { s += n || 0; });
     return s;
   }
   function isThemeOpen(k) { return meta.unlocked.themes.indexOf(k) >= 0; }
@@ -2293,7 +2373,10 @@
                give: function () { meta.unlocked.tracks.push(tr.id); },
                equip: function () { selectTrack(tr.id); } };
     });
-    return [["Режимы", modes], ["Темы", themes], ["Рубашки", backs], ["Цвета оформления", pals], ["Музыка", tracks], ["Улучшения", ups]];
+    var moonsList = [{ icon: "🌙", name: "1 луна", price: 50, owned: false,
+      desc: "Обмен: 50 ★ на 1 луну. У тебя лун: " + (meta.moons || 0) + ". Луны нужны для колонии на Луне в городе",
+      give: function () { meta.moons = (meta.moons || 0) + 1; } }];
+    return [["Режимы", modes], ["Темы", themes], ["Рубашки", backs], ["Цвета оформления", pals], ["Музыка", tracks], ["Улучшения", ups], ["Луны", moonsList]];
   }
 
   function buyItem(it) {
@@ -2316,7 +2399,7 @@
   function renderShop() {
     var box = $("shopList");
     box.innerHTML = "";
-    $("shopBalance").textContent = "★ " + balance();
+    $("shopBalance").textContent = "★ " + balance() + ((meta.moons || 0) ? "   🌙 " + meta.moons : "");
     shopSections().forEach(function (sec) {
       var hd = document.createElement("div");
       hd.className = "shop-h";
@@ -2363,6 +2446,7 @@
       });
       stars += m.bank || 0;
       ((m.triple && m.triple.stars) || []).forEach(function (n) { stars += n || 0; });
+      ((m.guess && m.guess.stars) || []).forEach(function (n) { stars += n || 0; });
       rows.push({ name: name, stars: stars, inf: (m.stats && m.stats.infBest) || 0, me: id === myId });
     }
     add("Гость", "", "");
@@ -2508,7 +2592,313 @@
   }
   $("openQuests").addEventListener("click", function () { renderQuests(); openSheet("questSheet"); });
 
+  /* ================= Отгадай, что загадал ================= */
+var GUESS = {
+    animals: {
+      chars: [["🐱","Кот"],["🐸","Лягушка"],["🐙","Осьминог"],["🐝","Пчела"],["🐰","Кролик"],["🦁","Лев"],["🐧","Пингвин"],["🐘","Слон"],["🐷","Свинья"],["🦉","Сова"],["🐳","Кит"],["🐵","Обезьяна"]],
+      qs: [
+        ["Это домашнее животное?", ["🐱","🐰","🐷"]],
+        ["Живёт в воде или у воды?", ["🐸","🐙","🐧","🐳"]],
+        ["У него есть крылья?", ["🐝","🐧","🦉"]],
+        ["Покрыто шерстью?", ["🐱","🐰","🦁","🐵"]],
+        ["Очень большое?", ["🐘","🐳"]],
+        ["Умеет прыгать?", ["🐸","🐰","🐵"]],
+        ["Это хищник?", ["🐱","🦁","🦉","🐙"]],
+        ["У него нет костей?", ["🐙","🐝"]]
+      ]
+    },
+    space: {
+      chars: [["🚀","Ракета"],["🛸","НЛО"],["🌍","Земля"],["🌙","Луна"],["⭐","Звезда"],["☄️","Комета"],["🪐","Сатурн"],["🌞","Солнце"],["👽","Инопланетянин"],["🛰️","Спутник"],["🔭","Телескоп"],["🧑‍🚀","Космонавт"]],
+      qs: [
+        ["Это природный объект?", ["🌍","🌙","⭐","☄️","🪐","🌞"]],
+        ["Создан людьми?", ["🚀","🛰️","🔭"]],
+        ["Это живое существо?", ["👽","🧑‍🚀"]],
+        ["Светится сам?", ["⭐","🌞"]],
+        ["Вращается вокруг другого тела?", ["🌍","🌙","☄️","🪐","🛰️"]],
+        ["Умеет сам лететь?", ["🚀","🛸"]],
+        ["Есть кольца или хвост?", ["☄️","🪐"]],
+        ["Это планета?", ["🌍","🪐"]],
+        ["Это ближайшая к нам звезда?", ["🌞"]],
+        ["Носит скафандр?", ["🧑‍🚀"]]
+      ]
+    },
+    cars: {
+      chars: [["🚗","Машина"],["🚌","Автобус"],["🏎️","Гоночная машина"],["🚓","Полиция"],["🚑","Скорая"],["🚒","Пожарная"],["🚜","Трактор"],["🏍️","Мотоцикл"],["🚲","Велосипед"],["✈️","Самолёт"],["🚁","Вертолёт"],["🚢","Корабль"]],
+      qs: [
+        ["Ездит по земле?", ["🚗","🚌","🏎️","🚓","🚑","🚒","🚜","🏍️","🚲"]],
+        ["Летает?", ["✈️","🚁"]],
+        ["Плавает?", ["🚢"]],
+        ["Есть двигатель?", ["🚗","🚌","🏎️","🚓","🚑","🚒","🚜","🏍️","✈️","🚁","🚢"]],
+        ["Всего два колеса?", ["🏍️","🚲"]],
+        ["Это спецтранспорт?", ["🚓","🚑","🚒"]],
+        ["Красного цвета?", ["🏎️","🚒"]],
+        ["Возит много пассажиров?", ["🚌","✈️","🚢"]],
+        ["Возит больных?", ["🚑"]],
+        ["Работает на поле?", ["🚜"]]
+      ]
+    },
+    food: {
+      chars: [["🍎","Яблоко"],["🍌","Банан"],["🍇","Виноград"],["🍓","Клубника"],["🍕","Пицца"],["🍟","Картошка фри"],["🍩","Пончик"],["🍦","Мороженое"],["🥕","Морковь"],["🧀","Сыр"],["🍿","Попкорн"],["🥐","Круассан"]],
+      qs: [
+        ["Это фрукт или ягода?", ["🍎","🍌","🍇","🍓"]],
+        ["Растёт в земле?", ["🥕"]],
+        ["Это сладкий десерт?", ["🍩","🍦"]],
+        ["Красного цвета?", ["🍎","🍓"]],
+        ["Жёлтого цвета?", ["🍌","🍟","🧀","🍿"]],
+        ["Подают горячим?", ["🍕","🍟"]],
+        ["Сделано из теста?", ["🍕","🍩","🥐"]],
+        ["Растёт на дереве или лозе?", ["🍎","🍇"]],
+        ["Сделано из молока?", ["🧀","🍦"]],
+        ["Сделано из картофеля или кукурузы?", ["🍟","🍿"]]
+      ]
+    },
+    flags: {
+      chars: [["🇷🇺","Россия"],["🇺🇸","США"],["🇬🇧","Британия"],["🇩🇪","Германия"],["🇮🇹","Италия"],["🇯🇵","Япония"],["🇨🇳","Китай"],["🇧🇷","Бразилия"],["🇨🇦","Канада"],["🇬🇷","Греция"],["🇸🇪","Швеция"],["🇨🇭","Швейцария"]],
+      qs: [
+        ["На флаге есть красный цвет?", ["🇷🇺","🇺🇸","🇬🇧","🇩🇪","🇮🇹","🇯🇵","🇨🇳","🇨🇦","🇨🇭"]],
+        ["На флаге есть синий цвет?", ["🇷🇺","🇺🇸","🇬🇧","🇧🇷","🇬🇷","🇸🇪"]],
+        ["На флаге есть зелёный цвет?", ["🇮🇹","🇧🇷"]],
+        ["На флаге есть жёлтый цвет?", ["🇩🇪","🇨🇳","🇧🇷","🇸🇪"]],
+        ["На флаге есть звёзды?", ["🇺🇸","🇨🇳","🇧🇷"]],
+        ["На флаге есть крест?", ["🇬🇧","🇬🇷","🇸🇪","🇨🇭"]],
+        ["Флаг из горизонтальных полос?", ["🇷🇺","🇩🇪","🇬🇷","🇺🇸"]],
+        ["На флаге есть круг?", ["🇯🇵","🇧🇷"]],
+        ["На флаге есть кленовый лист?", ["🇨🇦"]]
+      ]
+    },
+    faces: {
+      chars: [["😀","Улыбка"],["😂","Смех до слёз"],["😍","Влюблённый"],["😎","В очках"],["😴","Спит"],["🤔","Думает"],["😱","Испуг"],["🥳","Праздник"],["😇","Ангелок"],["😡","Злой"],["🥶","Замёрз"],["😭","Плачет"]],
+      qs: [
+        ["Он радуется?", ["😀","😂","😍","😎","🥳","😇"]],
+        ["У него плохое настроение?", ["😱","😡","😭"]],
+        ["Есть слёзы?", ["😂","😭"]],
+        ["Что-то на голове (шапка, нимб)?", ["🥳","😇"]],
+        ["Он спит?", ["😴"]],
+        ["Рука у лица?", ["🤔","😱"]],
+        ["Лицо необычного цвета?", ["😡","🥶"]],
+        ["Есть тёмные очки?", ["😎"]],
+        ["Над головой нимб?", ["😇"]],
+        ["Вместо глаз сердечки?", ["😍"]]
+      ]
+    },
+    sports: {
+      chars: [["⚽","Футбол"],["⚾","Бейсбол"],["🏀","Баскетбол"],["🎾","Теннис"],["🏐","Волейбол"],["🏒","Хоккей"],["⛳","Гольф"],["🥊","Бокс"],["🏹","Стрельба из лука"],["🏊","Плавание"],["🚴","Велоспорт"],["🎿","Лыжи"]],
+      qs: [
+        ["Играют мячом?", ["⚽","⚾","🏀","🎾","🏐","⛳"]],
+        ["Это командная игра?", ["⚽","⚾","🏀","🏐","🏒"]],
+        ["Нужна клюшка, ракетка или бита?", ["⚾","🎾","🏒","⛳"]],
+        ["Мяч бьют ногой?", ["⚽"]],
+        ["Мяч летит через сетку?", ["🎾","🏐"]],
+        ["Нужно попасть в цель?", ["🏹","⛳"]],
+        ["Проходит в воде?", ["🏊"]],
+        ["Нужен снег или лёд?", ["🎿","🏒"]],
+        ["Бьют противника?", ["🥊"]],
+        ["Нужен велосипед?", ["🚴"]]
+      ]
+    }
+  };
+  
+
+  var GUESS_LEVELS = [{ n: 6, limit: 99 }, { n: 8, limit: 99 }, { n: 10, limit: 9 }, { n: 12, limit: 8 }, { n: 12, limit: 7 }];
+  var GS = null, gCoverCb = null;
+
+  function gCols(n) { return n === 6 ? 3 : n === 8 ? 4 : n === 10 ? 5 : 4; }
+  function gSet(arr) { var s = {}; arr.forEach(function (e) { s[e] = true; }); return s; }
+  function gInfo(e) { return GS.chars.filter(function (c) { return c[0] === e; })[0]; }
+  function starsRow5(n) {
+    var s = "";
+    for (var i = 0; i < 5; i++) s += '<span class="' + (i < n ? "" : "off") + '" style="animation-delay:' + (0.1 + i * 0.15) + 's">★</span>';
+    return s;
+  }
+
+  function gStart(kind, level) {
+    gid++; over = false; stopTimer(); pm = "guess";
+    $("overlay").classList.remove("show");
+    $("gCover").classList.remove("show");
+    var data = GUESS[theme] || GUESS.animals;
+    var n = kind === "duo" ? 12 : GUESS_LEVELS[level].n;
+    var chars = shuffle(data.chars.slice()).slice(0, n);
+    var all = chars.map(function (c) { return c[0]; });
+    GS = {
+      kind: kind, level: level || 0, data: data, chars: chars, secret: [null, null],
+      alive: [all.slice(), all.slice()], asked: [[], []], qCount: [0, 0], turn: 0,
+      phase: kind === "duo" ? "pick0" : "play", chosen: null, sel: null, answered: false, wrongs: 0, ans: "",
+      limit: kind === "duo" ? 99 : GUESS_LEVELS[level].limit
+    };
+    if (kind === "bot") GS.secret[1] = chars[Math.floor(Math.random() * chars.length)][0];
+    gRender();
+    show("guess");
+  }
+
+  function gCover(title, text, btn, cb) {
+    $("gCoverTitle").textContent = title;
+    $("gCoverText").textContent = text;
+    $("gCoverBtn").textContent = btn;
+    gCoverCb = cb || null;
+    $("gCover").classList.add("show");
+  }
+
+  function gBoard(playing) {
+    var box = $("gBoard"), alive = playing ? gSet(GS.alive[GS.turn]) : null;
+    box.innerHTML = "";
+    box.style.gridTemplateColumns = "repeat(" + gCols(GS.chars.length) + ", 1fr)";
+    GS.chars.forEach(function (ch) {
+      var out = playing && !alive[ch[0]];
+      var selected = playing ? GS.sel === ch[0] : GS.chosen === ch[0];
+      var b = document.createElement("button");
+      b.className = "g-card" + (out ? " out" : "") + (selected ? " sel" : "");
+      b.innerHTML = '<span class="ge">' + ch[0] + '</span><span class="gn">' + ch[1] + "</span>";
+      b.setAttribute("aria-label", ch[1] + (out ? ", исключён" : ""));
+      b.addEventListener("click", function () {
+        if (playing) {
+          if (out || GS.phase !== "play" || (GS.kind === "duo" && GS.answered)) return;
+          GS.sel = ch[0];
+        } else GS.chosen = ch[0];
+        gRender();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function gRender() {
+    var duo = GS.kind === "duo", p = GS.turn, phase = GS.phase;
+    $("gTitle").textContent = duo ? "Отгадай, что загадал" : "Уровень " + (GS.level + 1);
+    $("gSub").textContent = duo ? "Вдвоём, по очереди" : "С ботом: " + GS.chars.length + " персонажей";
+    var picking = phase === "pick0" || phase === "pick1";
+    $("gPickBar").classList.toggle("hidden", !picking);
+    $("gPlay").classList.toggle("hidden", picking);
+    if (picking) {
+      $("gBanner").textContent = "Игрок " + (phase === "pick0" ? 1 : 2) + ": выбери персонажа, которого загадаешь. Другой игрок не смотрит!";
+      gBoard(false);
+      var ck = GS.chosen ? gInfo(GS.chosen) : null;
+      $("gPickBtn").textContent = ck ? "Загадать: " + ck[0] + " " + ck[1] : "Выбери персонажа";
+      $("gPickBtn").disabled = !ck;
+      return;
+    }
+    $("gBanner").textContent = duo
+      ? "Ход: Игрок " + (p + 1) + (GS.answered ? ". Теперь передай телефон" : ". Задай вопрос или угадай")
+      : "Бот загадал персонажа. Вопросов: " + GS.qCount[0] + (GS.limit < 99 ? " из " + GS.limit : "") +
+        (GS.qCount[0] >= GS.limit ? ". Вопросы закончились, угадывай!" : "");
+    gBoard(true);
+
+    var cands = GS.alive[p], canAsk = !GS.answered && GS.qCount[p] < GS.limit, qbox = $("gQs");
+    qbox.innerHTML = "";
+    GS.data.qs.forEach(function (q, qi) {
+      var mem = gSet(q[1]), yes = cands.filter(function (e) { return mem[e]; }).length;
+      var b = document.createElement("button");
+      b.className = "g-q";
+      b.textContent = q[0];
+      b.disabled = !(canAsk && yes > 0 && yes < cands.length);   // вопрос должен что-то выяснять
+      b.addEventListener("click", function () { gAsk(qi); });
+      qbox.appendChild(b);
+    });
+    $("gAnswer").textContent = GS.ans;
+    var hist = GS.asked[p];
+    $("gHist").innerHTML = hist.length ? hist.map(function (x) {
+      return '<div class="g-line">' + x.q + " — <b>" + (x.a ? "Да ✅" : "Нет ❌") + "</b></div>";
+    }).join("") : '<p class="share-note">Пока вопросов нет.</p>';
+    var si = GS.sel ? gInfo(GS.sel) : null;
+    $("gGuessBtn").textContent = si ? "Это он! " + si[0] + " " + si[1] : "Нажми на персонажа, чтобы угадать";
+    $("gGuessBtn").disabled = !si || (duo && GS.answered);
+    $("gPass").classList.toggle("hidden", !(duo && GS.answered));
+  }
+
+  function gAsk(qi) {
+    var p = GS.turn, q = GS.data.qs[qi];
+    if (GS.phase !== "play" || GS.answered || GS.qCount[p] >= GS.limit) return;
+    var mem = gSet(q[1]), ans = !!mem[GS.secret[1 - p]];
+    GS.alive[p] = GS.alive[p].filter(function (e) { return !!mem[e] === ans; });
+    GS.asked[p].push({ q: q[0], a: ans });
+    GS.qCount[p]++;
+    GS.ans = ans ? "✅ Да" : "❌ Нет";
+    GS.sel = null;
+    if (GS.kind === "duo") GS.answered = true;
+    sfx.flip();
+    gRender();
+  }
+
+  function gGuess() {
+    var p = GS.turn, e = GS.sel;
+    if (!e || GS.phase !== "play") return;
+    if (e === GS.secret[1 - p]) gWin(p);
+    else if (GS.kind === "duo") gLose(p);
+    else {
+      GS.wrongs++;
+      GS.alive[0] = GS.alive[0].filter(function (x) { return x !== e; });
+      GS.sel = null;
+      GS.ans = "❌ Это не он";
+      sfx.miss();
+      gRender();
+    }
+  }
+  function gLose(p) {
+    var t = gInfo(GS.secret[1 - p]);
+    GS.phase = "over";
+    modal("Игрок " + (2 - p) + " победил! 🏆", 0, "Игрок " + (p + 1) + " ошибся. Загадан был: " + t[0] + " " + t[1] + ".", false, "Реванш 🔁");
+    sfx.win(); confetti();
+  }
+  function gWin(p) {
+    var t = gInfo(GS.secret[1 - p]);
+    GS.phase = "over";
+    if (GS.kind === "duo") {
+      modal("Игрок " + (p + 1) + " победил! 🏆", 0, "Он угадал: " + t[0] + " " + t[1] + ". Вопросов задано: " + GS.qCount[p] + ".", false, "Реванш 🔁");
+      sfx.win(); confetti();
+      return;
+    }
+    var n = GS.chars.length, q = GS.qCount[0], idx = GS.level;
+    var base = 5 - Math.max(0, q - (Math.ceil(Math.log(n) / Math.LN2) + 1));      // быстро угадал: до 5 звёзд
+    var stars = Math.max(0, Math.min(5, base - GS.wrongs));
+    var P = meta.guess;
+    if (!P.best[idx] || q < P.best[idx]) P.best[idx] = q;
+    if (stars > (P.stars[idx] || 0)) P.stars[idx] = stars;
+    if (idx + 1 < GUESS_LEVELS.length && P.unlocked < idx + 2) P.unlocked = idx + 2;
+    saveMeta();
+    unlock("guess1");
+    if (stars === 5) unlock("guess5");
+    var hasNext = idx + 1 < GUESS_LEVELS.length;
+    modal("Угадал! 🎉", 0, "Загадано: " + t[0] + " " + t[1] + ". Вопросов: " + q + ", ошибок: " + GS.wrongs + ".", hasNext, "Сыграть ещё раз");
+    $("winStars").innerHTML = starsRow5(stars);
+    $("winStars").classList.remove("hidden");
+    sfx.win();
+    if (stars >= 3) confetti();
+  }
+
+  $("gBack").addEventListener("click", toMenu);
+  $("gRestart").addEventListener("click", function () { gStart(GS.kind, GS.level); });
+  $("gCoverBtn").addEventListener("click", function () {
+    $("gCover").classList.remove("show");
+    var f = gCoverCb; gCoverCb = null;
+    if (f) f();
+  });
+  $("gPickBtn").addEventListener("click", function () {
+    if (!GS.chosen) return;
+    if (GS.phase === "pick0") {
+      GS.secret[0] = GS.chosen; GS.chosen = null; GS.phase = "pick1";
+      gRender();
+      gCover("Передай телефон Игроку 2", "Игрок 1 загадал персонажа. Теперь Игрок 2 выбирает своего.", "Я Игрок 2", null);
+    } else {
+      GS.secret[1] = GS.chosen; GS.chosen = null; GS.phase = "play"; GS.turn = 0;
+      gRender();
+      gCover("Передай телефон Игроку 1", "Оба загадали. Игрок 1 начинает отгадывать!", "Я Игрок 1", null);
+    }
+  });
+  $("gGuessBtn").addEventListener("click", gGuess);
+  $("gPass").addEventListener("click", function () {
+    GS.turn = 1 - GS.turn; GS.answered = false; GS.sel = null; GS.ans = "";
+    gRender();
+    gCover("Передай телефон Игроку " + (GS.turn + 1), "Сейчас ходит Игрок " + (GS.turn + 1) + ".", "Я Игрок " + (GS.turn + 1), null);
+  });
+
   /* ================= Мой город (кликер) ================= */
+  var SUPER_COST = 150, SUPER_MS = 6000;               // супер-рабочий: 3 клика сразу, покупается один раз
+  var MOON_LEVELS = [
+    { name: "Лунная база",    rate: 20, cost: 1,  items: 4 },
+    { name: "Купола",         rate: 24, cost: 2,  items: 7 },
+    { name: "Лунный городок", rate: 30, cost: 3,  items: 10 },
+    { name: "Лунный город",   rate: 38, cost: 5,  items: 14 },
+    { name: "Лунная столица", rate: 48, cost: 8,  items: 18 },
+    { name: "Лунополис",      rate: 60, cost: 12, items: 22 }
+  ];
   var HELPER_COSTS = [25, 50, 90];                      // три помощника
   var HELPER_MS = 5000, HELPER_SEC = 5;                 // каждый кликает раз в 5 секунд, пока игра открыта
   var CITY_CAP_H = 8;                                   // сколько часов копится офлайн-доход
@@ -2525,14 +2915,17 @@
   ];
   function cityN() { return Math.max(3, 10 - ((meta.city && meta.city.power) || 0)); }
   function cityRate() { return CITY_LEVELS[meta.city.level - 1].rate; }
+  function cityRateOf(c) { return c.moon > 0 ? MOON_LEVELS[c.moon - 1].rate : CITY_LEVELS[c.level - 1].rate; }
+  function cityBalText() { return "★ " + balance() + ((meta.moons || 0) ? "   🌙 " + meta.moons : ""); }
   function cityInfoText() {
-    var c = meta.city, L = CITY_LEVELS[c.level - 1];
-    return "Уровень " + c.level + " «" + L.name + "»" + (L.rate ? ", офлайн +" + L.rate + " ★/час" : ", офлайн откроется на 2 уровне") +
-      (c.helpers ? ", помощников: " + c.helpers : "");
+    var c = meta.city, rate = cityRateOf(c);
+    var where = c.moon > 0 ? "Луна: «" + MOON_LEVELS[c.moon - 1].name + "»" : "Уровень " + c.level + " «" + CITY_LEVELS[c.level - 1].name + "»";
+    return where + (rate ? ", офлайн +" + rate + " ★/час" : ", офлайн откроется на 2 уровне") +
+      (c.helpers ? ", помощников: " + c.helpers : "") + (c.superW ? ", супер-рабочий" : "");
   }
 
   // Рисунок города: чем выше уровень, тем больше и необычнее
-  function citySvg(level, helpers) {
+  function citySvg(level, helpers, superW) {
     var L = CITY_LEVELS[level - 1], cx = 180, cy = 410, R = 215, rnd = rng(1000 + level * 77), i;
     var s = '<svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Город на планете">';
     s += '<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#070b24"/><stop offset="1" stop-color="' + L.skyEnd + '"/></linearGradient>' +
@@ -2581,14 +2974,81 @@
       var rx = 50 + i * 110 + rnd() * 30, ry = 35 + rnd() * 50;
       s += '<g transform="rotate(25 ' + rx.toFixed(0) + " " + ry.toFixed(0) + ')"><path d="M' + rx.toFixed(0) + " " + ry.toFixed(0) + " l3 9 h-6 z" + '" fill="#fff"/><path d="M' + rx.toFixed(0) + " " + (ry + 9).toFixed(0) + ' l2 7 h-4 z" fill="#ff9f43"/></g>';
     }
-    var HC = ["#ffd166", "#ff7a7a", "#6be3ff"], HA = [-22, 0, 22];
+    s += peopleSvg(rot, cx, cy, R, helpers, superW);
+    return s + "</svg>";
+  }
+
+  function peopleSvg(rot, cx, cy, R, helpers, superW) {
+    var s = "", i, HC = ["#ffd166", "#ff7a7a", "#6be3ff"], HA = [-22, 0, 22];
     for (i = 0; i < (helpers || 0); i++) {
       var fy = cy - R + 11;
-      s += rot(HA[i], '<g transform="translate(' + cx + " " + fy + ') scale(1.7) translate(' + (-cx) + " " + (-fy) + ')"><g class="hp" data-i="' + i + '"><rect x="' + (cx - 2.6) + '" y="' + (fy - 11) + '" width="5.2" height="9" rx="1.6" fill="' + HC[i] + '"/>' +
+      s += rot(HA[i], '<g transform="translate(' + cx + " " + fy + ") scale(1.7) translate(" + (-cx) + " " + (-fy) + ')"><g class="hp" data-i="' + i + '">' +
+        '<rect x="' + (cx - 2.6) + '" y="' + (fy - 11) + '" width="5.2" height="9" rx="1.6" fill="' + HC[i] + '"/>' +
         '<circle cx="' + cx + '" cy="' + (fy - 14) + '" r="3.4" fill="#ffe0bd"/>' +
         '<rect x="' + (cx - 1.6) + '" y="' + (fy - 2) + '" width="1.3" height="4" fill="#2a2f45"/><rect x="' + (cx + 0.3) + '" y="' + (fy - 2) + '" width="1.3" height="4" fill="#2a2f45"/>' +
         '<rect x="' + (cx + 2.4) + '" y="' + (fy - 9) + '" width="3.6" height="1.4" rx=".7" fill="' + HC[i] + '"/></g></g>');
     }
+    if (superW) {
+      var gy = cy - R + 12;
+      s += rot(11, '<g transform="translate(' + cx + " " + gy + ") scale(2.3) translate(" + (-cx) + " " + (-gy) + ')"><g class="hp" data-i="3">' +
+        '<path d="M' + (cx - 3) + " " + (gy - 10) + ' l-4 10 h4.5 z" fill="#e63946"/>' +
+        '<rect x="' + (cx - 3.2) + '" y="' + (gy - 11) + '" width="6.4" height="9.5" rx="1.8" fill="#ff9f1a"/>' +
+        '<circle cx="' + cx + '" cy="' + (gy - 14.5) + '" r="3.4" fill="#ffe0bd"/>' +
+        '<path d="M' + (cx - 3.9) + " " + (gy - 15) + ' a3.9 3.9 0 0 1 7.8 0 z" fill="#ffd400"/>' +
+        '<rect x="' + (cx - 1.7) + '" y="' + (gy - 2) + '" width="1.4" height="4" fill="#2a2f45"/><rect x="' + (cx + 0.3) + '" y="' + (gy - 2) + '" width="1.4" height="4" fill="#2a2f45"/>' +
+        '<rect x="' + (cx + 2.6) + '" y="' + (gy - 11) + '" width="3.8" height="1.6" rx=".8" fill="#ff9f1a"/></g></g>');
+    }
+    return s;
+  }
+
+  // Колония на Луне: Земля в небе, купола, модули, башни, вездеход
+  function moonSvg(level, helpers, superW) {
+    var M = MOON_LEVELS[level - 1], cx = 180, cy = 410, R = 215, rnd = rng(5000 + level * 91), i, y0 = cy - R + 1;
+    var s = '<svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Колония на Луне">';
+    s += '<defs><linearGradient id="msky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#02030c"/><stop offset="1" stop-color="#101437"/></linearGradient>' +
+      '<radialGradient id="mpl" cx="50%" cy="30%" r="75%"><stop offset="0" stop-color="#dfe2ec"/><stop offset="1" stop-color="#7a8196"/></radialGradient></defs>';
+    s += '<rect width="360" height="250" fill="url(#msky)"/>';
+    for (i = 0; i < 52; i++) s += '<circle cx="' + Math.round(rnd() * 360) + '" cy="' + Math.round(rnd() * 160) + '" r="' + (0.5 + rnd() * 1.1).toFixed(1) + '" fill="#fff" opacity="' + (0.35 + rnd() * 0.6).toFixed(2) + '"/>';
+    var er = 17 + level * 1.4;
+    s += '<circle cx="292" cy="52" r="' + (er + 5) + '" fill="#6cb4ff" opacity=".18"/><circle cx="292" cy="52" r="' + er + '" fill="#3b82c4"/>' +
+      '<ellipse cx="287" cy="48" rx="' + (er * 0.45) + '" ry="' + (er * 0.3) + '" fill="#4caf6a"/><ellipse cx="298" cy="58" rx="' + (er * 0.3) + '" ry="' + (er * 0.2) + '" fill="#4caf6a"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="url(#mpl)"/>';
+    for (i = 0; i < 9; i++) {
+      var kr = 3 + rnd() * 7;
+      s += '<ellipse cx="' + (20 + rnd() * 320).toFixed(0) + '" cy="' + (224 + rnd() * 24).toFixed(0) + '" rx="' + kr.toFixed(1) + '" ry="' + (kr * 0.45).toFixed(1) + '" fill="rgba(60,66,90,.22)"/>';
+    }
+    function rot(deg, inner) { return '<g transform="rotate(' + deg.toFixed(1) + " " + cx + " " + cy + ')">' + inner + "</g>"; }
+    var n = M.items, span = Math.min(36, 8 + n * 1.4);
+    for (i = 0; i < n; i++) {
+      var t = n > 1 ? i / (n - 1) : 0.5, ang = -span + t * 2 * span, center = 1 - Math.abs(2 * t - 1), kind = rnd(), b = "";
+      var hmax = 10 + level * 4 + center * level * 7;
+      if (kind < 0.4) {
+        var r = 6 + rnd() * 5 + level * 0.8;
+        b = '<path d="M' + (cx - r).toFixed(1) + " " + y0 + " A" + r.toFixed(1) + " " + r.toFixed(1) + " 0 0 1 " + (cx + r).toFixed(1) + " " + y0 + ' Z" fill="rgba(160,225,255,.28)" stroke="#bfe9ff" stroke-width="1"/>' +
+          '<rect x="' + (cx - r * 0.35).toFixed(1) + '" y="' + (y0 - r * 0.55).toFixed(1) + '" width="' + (r * 0.7).toFixed(1) + '" height="' + (r * 0.55).toFixed(1) + '" fill="#eef3ff"/>';
+      } else if (kind < 0.75) {
+        var w = 8 + rnd() * 6, hh = 8 + rnd() * hmax;
+        b = '<rect x="' + (cx - w / 2).toFixed(1) + '" y="' + (y0 - hh).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) + '" fill="#f1f4fb"/>' +
+          '<rect x="' + (cx - w / 2 + 2).toFixed(1) + '" y="' + (y0 - hh + 3).toFixed(1) + '" width="' + (w - 4).toFixed(1) + '" height="2.4" fill="#6be3ff"/>';
+      } else if (kind < 0.92 && level >= 2) {
+        var th = 18 + rnd() * hmax * 1.4;
+        b = '<rect x="' + (cx - 2) + '" y="' + (y0 - th).toFixed(1) + '" width="4" height="' + th.toFixed(1) + '" fill="#dfe6f5"/><circle cx="' + cx + '" cy="' + (y0 - th).toFixed(1) + '" r="2.2" fill="#6be3ff"/>';
+      } else {
+        b = '<rect x="' + (cx - 0.8) + '" y="' + (y0 - 7) + '" width="1.6" height="7" fill="#cfd5e6"/><rect x="' + (cx - 9) + '" y="' + (y0 - 9) + '" width="18" height="3" fill="#274a9e" transform="rotate(-18 ' + cx + " " + (y0 - 8) + ')"/>';
+      }
+      s += rot(ang, b);
+    }
+    s += rot(-span - 6, '<rect x="' + (cx - 0.5) + '" y="' + (y0 - 16) + '" width="1" height="16" fill="#e8e8ee"/><rect x="' + cx + '" y="' + (y0 - 16) + '" width="9" height="6" fill="#e63946"/>');
+    if (level >= 2) s += rot(span + 8, '<rect x="' + (cx - 6) + '" y="' + (y0 - 6) + '" width="12" height="4" rx="1" fill="#cfd5e6"/><circle cx="' + (cx - 4) + '" cy="' + (y0 - 1) + '" r="2" fill="#40455a"/><circle cx="' + (cx + 4) + '" cy="' + (y0 - 1) + '" r="2" fill="#40455a"/>');
+    if (level >= 5) s += rot(0, '<path d="M' + (cx - 44) + " " + (y0 + 1) + " A44 44 0 0 1 " + (cx + 44) + " " + (y0 + 1) + ' Z" fill="rgba(150,220,255,.14)" stroke="rgba(200,240,255,.7)" stroke-width="1.5"/>');
+    if (level >= 6) {
+      for (i = 0; i < 16; i++) s += rot(-span - 4 + i * ((2 * span + 8) / 15), '<circle cx="' + cx + '" cy="' + (y0 - 2) + '" r=".9" fill="#ffd166"/>');
+      for (i = 0; i < 2; i++) {
+        var rx = 70 + i * 150 + rnd() * 30, ry = 40 + rnd() * 40;
+        s += '<g transform="rotate(25 ' + rx.toFixed(0) + " " + ry.toFixed(0) + ')"><path d="M' + rx.toFixed(0) + " " + ry.toFixed(0) + ' l3 9 h-6 z" fill="#fff"/><path d="M' + rx.toFixed(0) + " " + (ry + 9).toFixed(0) + ' l2 7 h-4 z" fill="#ff9f43"/></g>';
+      }
+    }
+    s += peopleSvg(rot, cx, cy, R, helpers, superW);
     return s + "</svg>";
   }
 
@@ -2600,7 +3060,7 @@
 
   // Офлайн-доход: копится до CITY_CAP_H часов, выдаётся при возвращении
   function cityCollect(announce) {
-    var c = meta.city, now = Date.now(), rate = CITY_LEVELS[c.level - 1].rate;
+    var c = meta.city, now = Date.now(), rate = cityRateOf(c);
     if (!c.last || c.last > now || rate <= 0) { c.last = now; return 0; }
     var rawH = (now - c.last) / 3600000, hours = Math.min(rawH, CITY_CAP_H);
     var n = Math.floor(rate * hours);
@@ -2614,14 +3074,17 @@
 
   function renderCity() {
     var c = meta.city, L = CITY_LEVELS[c.level - 1], n = cityN();
-    $("cityBal").textContent = "★ " + balance();
-    var drawKey = c.level + ":" + (c.helpers || 0);
-    if (cityShownLevel !== drawKey) { $("citySvg").innerHTML = citySvg(c.level, c.helpers || 0); cityShownLevel = drawKey; }
+    $("cityBal").textContent = cityBalText();
+    var drawKey = c.level + ":" + (c.helpers || 0) + ":" + (c.superW ? 1 : 0) + ":" + (c.moon || 0);
+    if (cityShownLevel !== drawKey) {
+      $("citySvg").innerHTML = c.moon > 0 ? moonSvg(c.moon, c.helpers || 0, c.superW) : citySvg(c.level, c.helpers || 0, c.superW);
+      cityShownLevel = drawKey;
+    }
     $("cityBar").style.width = Math.round(100 * c.prog / n) + "%";
     $("cityProgText").textContent = "Клики до звезды: " + c.prog + " из " + n;
     $("cityStats").innerHTML =
       "<div><b>" + c.taps + "</b>кликов</div><div><b>" + c.earned + " ★</b>заработано</div>" +
-      "<div><b>" + (L.rate ? "+" + L.rate + " ★/ч" : "нет") + "</b>офлайн</div>";
+      "<div><b>" + (cityRateOf(c) ? "+" + cityRateOf(c) + " ★/ч" : "нет") + "</b>офлайн</div>";
 
     var cards = "";
     var pw = c.power || 0, maxP = POWER_COSTS.length;
@@ -2632,6 +3095,9 @@
     cards += '<div class="shop-item"><span class="si">🧑‍🔧</span><div class="st"><b>Помощники (' + hp + " из " + HELPER_COSTS.length + ")</b><span>Человечки сами кликают раз в " +
       HELPER_SEC + " секунд, пока игра открыта</span></div>" +
       (hp < HELPER_COSTS.length ? '<button class="buy' + (HELPER_COSTS[hp] > balance() ? " cant" : "") + '" data-buy="helper">★ ' + HELPER_COSTS[hp] + "</button>" : '<button class="buy done" disabled>✓</button>') + "</div>";
+    cards += '<div class="shop-item"><span class="si">🦸</span><div class="st"><b>Супер-рабочий</b><span>Кликает сразу 3 раза каждые ' + (SUPER_MS / 1000) +
+      " секунд. Можно купить только один раз</span></div>" +
+      (c.superW ? '<button class="buy done" disabled>✓</button>' : '<button class="buy' + (SUPER_COST > balance() ? " cant" : "") + '" data-buy="super">★ ' + SUPER_COST + "</button>") + "</div>";
     if (c.level < CITY_LEVELS.length) {
       var nx = CITY_LEVELS[c.level];
       cards += '<div class="shop-item"><span class="si">🏙️</span><div class="st"><b>Улучшить город: «' + nx.name + '»</b><span>Офлайн-доход ' + nx.rate +
@@ -2639,23 +3105,55 @@
     } else {
       cards += '<div class="shop-item"><span class="si">🌌</span><div class="st"><b>Космополис построен</b><span>Максимальный уровень города</span></div><button class="buy done" disabled>✓</button></div>';
     }
+    if (c.level >= CITY_LEVELS.length) {
+      if ((c.moon || 0) < MOON_LEVELS.length) {
+        var ml = MOON_LEVELS[c.moon || 0];
+        cards += '<div class="shop-item"><span class="si">🌙</span><div class="st"><b>' + (c.moon ? "Луна: «" + ml.name + "»" : "Начать колонию на Луне") + "</b><span>" +
+          (c.moon ? "" : "«" + ml.name + "». ") + "Офлайн-доход " + ml.rate + " ★ в час. Платится лунами: 1 🌙 = 50 ★ (обмен в магазине)</span></div>" +
+          '<button class="buy' + ((meta.moons || 0) < ml.cost ? " cant" : "") + '" data-buy="moon">🌙 ' + ml.cost + "</button></div>";
+      } else {
+        cards += '<div class="shop-item"><span class="si">🚀</span><div class="st"><b>Лунополис построен</b><span>Колония на Луне достигла максимума</span></div><button class="buy done" disabled>✓</button></div>';
+      }
+    } else {
+      cards += '<div class="shop-item"><span class="si">🌙</span><div class="st"><b>Колония на Луне</b><span>Достройте город на планете до «Космополиса», и откроется Луна</span></div><button class="buy done" disabled>🔒</button></div>';
+    }
     $("cityCards").innerHTML = cards;
     qsa("#cityCards [data-buy]").forEach(function (b) { b.addEventListener("click", function () { cityBuy(b.dataset.buy); }); });
     $("cityNote").textContent = "Нажимай на планету. Звёзды из города идут на счёт для магазина, но не в общий рейтинг.";
   }
 
   function cityBuy(kind) {
-    var c = meta.city, price = kind === "power" ? POWER_COSTS[c.power || 0] : kind === "helper" ? HELPER_COSTS[c.helpers || 0] : CITY_LEVELS[c.level].cost;
+    var c = meta.city;
+    if (kind === "moon") {
+      var ml = MOON_LEVELS[c.moon || 0];
+      if (!ml) return;
+      if ((meta.moons || 0) < ml.cost) { showToast("Не хватает лун. Обменяй звёзды на луны в магазине: 1 🌙 = 50 ★"); return; }
+      cityCollect(false);
+      meta.moons -= ml.cost;
+      c.moon = (c.moon || 0) + 1;
+      c.last = Date.now();
+      saveMeta();
+      sfx.award();
+      showToast("🌙 Колония на Луне: «" + ml.name + "»");
+      unlock("moon1");
+      if (c.moon >= MOON_LEVELS.length) unlock("moon6");
+      renderCity();
+      renderMenu();
+      return;
+    }
+    var price = kind === "power" ? POWER_COSTS[c.power || 0] : kind === "helper" ? HELPER_COSTS[c.helpers || 0] : kind === "super" ? SUPER_COST : CITY_LEVELS[c.level].cost;
     if (price > balance()) { showToast("Не хватает " + (price - balance()) + " ★. Кликай по планете!"); return; }
     cityCollect(false);                       // сначала зачтём накопленное
     meta.spent = (meta.spent || 0) + price;
     if (kind === "power") c.power = (c.power || 0) + 1;
     else if (kind === "helper") { c.helpers = (c.helpers || 0) + 1; helperClock = [0, 0, 0]; if (c.helpers >= 3) unlock("crew"); }
+    else if (kind === "super") { c.superW = true; superClock = 0; }
     else { c.level++; c.last = Date.now(); }
     saveMeta();
     sfx.award();
     showToast(kind === "power" ? "👆 Теперь " + cityN() + " " + pl3(cityN(), ["клик", "клика", "кликов"]) + " = 1 ★"
       : kind === "helper" ? "🧑‍🔧 Помощник вышел на работу (" + c.helpers + " из 3)"
+      : kind === "super" ? "🦸 Супер-рабочий вышел на работу!"
       : "🏙️ Новый уровень города: «" + CITY_LEVELS[c.level - 1].name + "»");
     if (c.level >= 4) unlock("city4");
     if (c.level >= CITY_LEVELS.length) unlock("city8");
@@ -2695,11 +3193,12 @@
       $("shopBal").textContent = "★ " + balance();
       if ($("menu").classList.contains("active")) $("total").innerHTML = '<span class="s">★</span> ' + balance() + " на счёте, всего заработано " + lifetime();
       if (open) {
-        $("cityBal").textContent = "★ " + balance();
+        $("cityBal").textContent = cityBalText();
         $("cityStats").children[1].firstChild.textContent = c.earned + " ★";
         qsa("#cityCards .buy[data-buy]").forEach(function (bt) {
           var k = bt.dataset.buy;
-          var price = k === "power" ? POWER_COSTS[c.power || 0] : k === "helper" ? HELPER_COSTS[c.helpers || 0] : (CITY_LEVELS[c.level] || {}).cost;
+          if (k === "moon") return;
+          var price = k === "power" ? POWER_COSTS[c.power || 0] : k === "helper" ? HELPER_COSTS[c.helpers || 0] : k === "super" ? SUPER_COST : (CITY_LEVELS[c.level] || {}).cost;
           bt.classList.toggle("cant", price > balance());
         });
       }
@@ -2712,18 +3211,30 @@
     cityClick(e.clientX, e.clientY, -1);
   }
 
-  // Помощники кликают сами, пока игра открыта
-  var helperClock = [0, 0, 0];
+  // Помощники кликают сами, пока игра открыта; супер-рабочий кликает по 3 раза сразу
+  var helperClock = [0, 0, 0], superClock = 0;
+  function figureCenter(i) {
+    var el = document.querySelector('#citySvg .hp[data-i="' + i + '"]'), bb = el ? el.getBoundingClientRect() : null;
+    return bb ? { x: bb.left + bb.width / 2, y: bb.top } : { x: 0, y: 0 };
+  }
   function helperTick() {
-    var n = (meta && meta.city && meta.city.helpers) || 0;
-    if (!n || document.hidden) return;
-    var now = Date.now();
-    for (var i = 0; i < n; i++) {
+    var c = meta && meta.city;
+    if (!c || document.hidden) return;
+    var n = c.helpers || 0, now = Date.now(), i;
+    for (i = 0; i < n; i++) {
       if (!helperClock[i]) helperClock[i] = now + i * 1700;       // начинают не одновременно
       if (now - helperClock[i] >= HELPER_MS) {
         helperClock[i] = now;
-        var el = document.querySelector('#citySvg .hp[data-i="' + i + '"]'), bb = el ? el.getBoundingClientRect() : null;
-        cityClick(bb ? bb.left + bb.width / 2 : 0, bb ? bb.top : 0, i);
+        var pt = figureCenter(i);
+        cityClick(pt.x, pt.y, i);
+      }
+    }
+    if (c.superW) {
+      if (!superClock) superClock = now + 2500;
+      if (now - superClock >= SUPER_MS) {
+        superClock = now;
+        var sp = figureCenter(3);
+        for (var k = 0; k < 3; k++) cityClick(sp.x + (k - 1) * 22, sp.y, 3);
       }
     }
   }
@@ -2990,12 +3501,12 @@
   var navEntry = false, navIgnore = 0;
   function isDeep() {
     return !!(qsa(".sheet-overlay.show").length || $("tutorial").classList.contains("show") ||
-      $("overlay").classList.contains("show") || $("game").classList.contains("active"));
+      $("overlay").classList.contains("show") || $("game").classList.contains("active") || $("guess").classList.contains("active"));
   }
   function handleBack() {
     if ($("tutorial").classList.contains("show")) { closeTutorial(); return; }
     if (qsa(".sheet-overlay.show").length) { closeSheets(); return; }
-    if ($("overlay").classList.contains("show") || $("game").classList.contains("active")) toMenu();
+    if ($("overlay").classList.contains("show") || $("game").classList.contains("active") || $("guess").classList.contains("active")) toMenu();
   }
   function syncNav() {
     try {
@@ -3067,6 +3578,7 @@
       var m = JSON.parse((d && d[META_KEY]) || "{}") || {};
       out.stars += m.bank || 0;
       ((m.triple && m.triple.stars) || []).forEach(function (n) { out.stars += n || 0; });
+      ((m.guess && m.guess.stars) || []).forEach(function (n) { out.stars += n || 0; });
       out.inf = (m.stats && m.stats.infBest) || 0;
     } catch (e) {}
     return out;
